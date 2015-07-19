@@ -1,7 +1,7 @@
 import groovy.sql.Sql 
 import groovy.json.*
 
-def sql = Sql.newInstance("jdbc:sqlite:/home/boris/MC-Projects/AMC/data/capture.sqlite", "org.sqlite.JDBC")
+def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
 //TODO handle errors
 
 if(params.student && params.page && params.copy) {

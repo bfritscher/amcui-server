@@ -2,9 +2,9 @@ import groovy.sql.Sql
 import groovy.json.*
 import com.xlson.groovycsv.CsvParser
  
-def sql = Sql.newInstance("jdbc:sqlite:/home/boris/MC-Projects/AMC/data/capture.sqlite", "org.sqlite.JDBC")
-sql.execute("ATTACH DATABASE '/home/boris/MC-Projects/AMC/data/layout.sqlite' AS layout")
-sql.execute("ATTACH DATABASE '/home/boris/MC-Projects/AMC/data/association.sqlite' AS assoc")
+def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
+sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/layout.sqlite' AS layout")
+sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/association.sqlite' AS assoc")
 
 
 //SELECT value FROM association_variables WHERE name='key_in_list'
