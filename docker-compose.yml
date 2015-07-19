@@ -1,0 +1,8 @@
+amcui-server:
+  build: .
+  command: bash -c "cd /usr/local/tomcat/webapps/amcui/webapp/WEB-INF/;./requirements.sh;./usr/local/tomcat/bin/catalina.sh run;" 
+  working_dir: /app
+  volumes:
+    - webapp:/usr/local/tomcat/webapps/amcui
+  ports:
+    - "8080:8080"
