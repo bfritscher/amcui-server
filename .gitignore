@@ -1,3 +1,5 @@
 project/
 projects/
 webapp/WEB-INF/lib/
+.tmp/
+node_modules/

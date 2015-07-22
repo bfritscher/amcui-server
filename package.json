@@ -1,0 +1,31 @@
+{
+  "name": "amcui-server",
+  "version": "1.0.0",
+  "description": "",
+  "devDependencies": {
+    "grunt": "^0.4.5",
+    "grunt-concurrent": "^2.0.0",
+    "grunt-contrib-watch": "^0.6.1",
+    "grunt-newer": "^1.1.1",
+    "grunt-nodemon": "^0.4.0",
+    "grunt-ts": "^4.2.0",
+    "grunt-tslint": "^2.3.1-beta"
+  },
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bfritscher/amcui-server.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bfritscher/amcui-server/issues"
+  },
+  "homepage": "https://github.com/bfritscher/amcui-server#readme",
+  "dependencies": {
+    "sqlite3": "^3.0.9"
+  }
+}
