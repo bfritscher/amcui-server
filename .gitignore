@@ -1,5 +1,5 @@
-project/
-projects/
-webapp/WEB-INF/lib/
+app/projects/
 .tmp/
+dist/
 node_modules/
+.env

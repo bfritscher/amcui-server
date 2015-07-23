@@ -26,6 +26,13 @@
   },
   "homepage": "https://github.com/bfritscher/amcui-server#readme",
   "dependencies": {
-    "sqlite3": "^3.0.9"
+    "body-parser": "^1.13.2",
+    "cors": "^2.7.1",
+    "dotenv": "^1.2.0",
+    "errorhandler": "^1.4.1",
+    "express": "^4.13.1",
+    "source-map-support": "^0.3.2",
+    "sqlite3": "^3.0.9",
+    "typescript": "^1.5.3"
   }
 }

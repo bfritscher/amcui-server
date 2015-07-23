@@ -18,7 +18,7 @@ module.exports = function (grunt) {
 
         watch: {
             scripts: {
-                files: ['*.ts', '!node_modules/**/*.ts'], // the watched files
+                files: ['**/*.ts', '!node_modules/**/*.ts'], // the watched files
                 tasks: ["newer:tslint:all", "ts:build"], // the task to run
                 options: {
                     spawn: false // makes the watch task faster
@@ -40,13 +40,13 @@ module.exports = function (grunt) {
                 configuration: grunt.file.readJSON("tslint.json")
             },
             all: {
-                src: ["*.ts", "!node_modules/**/*.ts", "!obj/**/*.ts", "!typings/**/*.ts"] // avoid linting typings files and node_modules files
+                src: ["**/*.ts", "!node_modules/**/*.ts", "!obj/**/*.ts", "!typings/**/*.ts"] // avoid linting typings files and node_modules files
             }
         },
 
         ts: {
             build: {
-                src: ["*.ts", "!node_modules/**/*.ts"], // Avoid compiling TypeScript files in node_modules
+                src: ["**/*.ts", "!node_modules/**/*.ts"], // Avoid compiling TypeScript files in node_modules
                 outDir: 'dist',
                 options: {
                     module: 'commonjs', // To compile TypeScript using external modules like NodeJS

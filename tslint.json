@@ -46,7 +46,7 @@
       "check-whitespace"
     ],
     "quotemark": [
-      true,
+      false,
       "single"
     ],
     "radix": true,
@@ -55,7 +55,7 @@
       true,
       "allow-null-check"
     ],
-    "variable-name": true,
+    "variable-name": false,
     "whitespace": [
       true,
       "check-branch",
