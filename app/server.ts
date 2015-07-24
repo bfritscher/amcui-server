@@ -225,6 +225,7 @@ app.get('/missing', (req, res) => {
 app.get('/capture', (req, res) => {
     database(res, (db) => {
         var threshold = 0.15;
+        var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
         + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
         + 'FROM capture_zone WHERE student=p.student AND page=p.page AND copy=p.copy AND type=4) s '
         + 'FROM capture_page p ORDER BY p.student, p.page, p.copy';
