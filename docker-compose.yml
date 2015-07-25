@@ -1,6 +1,8 @@
+redis:
+  image: redis:3
 amcuiserver:
   build: .
-  command: bash -c "while true; do sleep 3; grunt serve; done" 
+  command: bash -c "while true; do sleep 3; grunt serve; done"
   working_dir: /amc
   volumes:
     - ./app:/amc/app
@@ -8,4 +10,5 @@ amcuiserver:
     - "8181:8181"
     - "5858:5858"
     - "9001:9001"
-    
+  links:
+    - redis:redis

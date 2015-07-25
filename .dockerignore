@@ -1,6 +1,6 @@
 docker
 Dockerfile
 docker-compose.yml
-node_modules/
+node_modules/*
 # app is mounted as volume for dev
-app/
+app/*

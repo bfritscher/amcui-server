@@ -1,6 +1,5 @@
 ﻿/// <reference path="express/express.d.ts" />
 
-
 declare module "method-override" {
     import express = require("express");
     function methodOverride(): express.RequestHandler;
@@ -13,10 +12,10 @@ declare module "cors" {
     export = cors;
 }
 
-declare module "raven"{
+declare module "raven" {
     var middleware;
     var Client:Client;
-    interface Client{
+    interface Client {
         new (dsn:String, options?:any);
         captureMessage(message:String, options?:any, callback?:Function);
         captureError(error:Error, options?:any, callback?:Function);
@@ -24,7 +23,20 @@ declare module "raven"{
     }
 }
 
-declare module "is-online"{
+declare module "is-online" {
     function isOnline(callback:(err:Error, isOnline:boolean)=>void):void;
     export = isOnline;
+}
+
+declare module "connect-redis" {
+    function RedisStore(session:any):any;
+    export = RedisStore;
+}
+
+declare module "passport.socketio" {
+    export function authorize(options:any):any;
+}
+
+declare module "socketio-jwt" {
+    export function authorize(options:any):any;
 }

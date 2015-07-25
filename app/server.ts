@@ -2,24 +2,37 @@
 
 require('dotenv').load();
 require('source-map-support').install();
+import fs = require('fs');
 import cors = require('cors');
 import express = require('express');
+import io = require('socket.io');
 import bodyParser = require('body-parser');
 import errorHandler = require('errorhandler');
 import sqlite3 = require('sqlite3');
 import path = require('path');
+import jwt = require('jsonwebtoken');
+import socketioJwt = require('socketio-jwt');
+import expressJwt = require('express-jwt');
+import bcrypt = require('bcrypt');
+import redis = require('redis');
+import xml2js = require('xml2js');
+import mkdirp = require('mkdirp');
+import Acl = require('acl');
+
+var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
+redisClient.on('error', function (err) {
+    console.log('Redis error ' + err);
+});
+var acl = new Acl(new Acl.redisBackend(redisClient, 'acl'), {debug: (txt) => {
+    console.log(JSON.stringify(txt));
+}});
 
 var app = express();
-app.use(cors({
-    origin: true,
-    credentials: true
-}));
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json({limit: '50mb'}));
+var server = require('http').Server(app);
+var ws = io(server);
 
 var env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
-    app.use(errorHandler({ dumpExceptions: true, showStack: true }));
     sqlite3.verbose();
     //app.use(express.static(__dirname + '/../../avionmake/app'));
     //app.use('/scripts', express.static(__dirname + '/../../avionmake/.tmp/scripts'));
@@ -30,10 +43,129 @@ else if (env === 'production') {
     app.use(express.static(__dirname + '/public'));
 }
 
-var project = 'test'; //sqla-2015-exa';
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({limit: '50mb'}));
 
+ws.on('connection', socketioJwt.authorize({
+    secret: process.env.JWT_SECRET,
+    timeout: 15000 // 15 seconds to send the authentication message
+  }));
+
+ws.on('authenticated', function(socket) {
+    //this socket is authenticated, we are good to handle more events from it.
+    console.log('hello! ' + socket.decoded_token.id);
+});
+
+//secure /project with auth api
+app.use('/project', expressJwt({secret: process.env.JWT_SECRET}));
+
+function aclProject(req, res, next){
+    return <express.RequestHandler>acl.middleware(2, (req: express.Request, res) => {
+        return req.user.username;
+    }, 'admin')(req, res, next);
+}
+
+/* TEST AREA */
 app.get('/', (req, res) => {
     res.send('Hello World3!');
+});
+
+app.get('/project/:project/config', (req, res) => {
+    var filename = path.resolve(__dirname, '../app/projects/' + req.params.project + '/options.xml');
+    fs.readFile(filename, 'utf-8', function(err, data) {
+        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
+            var builder = new xml2js.Builder();
+            result.projetAMC.seuil = 1.0;
+            var xml = builder.buildObject(result);
+            fs.writeFile(filename, xml);
+            res.json(result.projetAMC.seuil);
+        });
+    });
+});
+
+
+app.get('/project/create/:project', (req, res) => {
+    // create project
+    var root = path.resolve(__dirname, '../app/projects/', req.params.project);
+    if (!fs.existsSync(root)) {
+        mkdirp.sync(root + '/cr/corrections/jpg');
+        mkdirp.sync(root + '/cr/corrections/pdf');
+        mkdirp.sync(root + '/cr/zooms');
+        mkdirp.sync(root + '/cr/diagnostic');
+        mkdirp.sync(root + '/data');
+        mkdirp.sync(root + '/scans');
+        mkdirp.sync(root + '/exports');
+        mkdirp.sync(root + '/src');
+        //option file
+        //role, resource, permission
+        acl.allow(req.params.project, '/project/' + req.params.project, 'admin');
+        //user, role
+        acl.addUserRoles(req.user.username, req.params.project);
+        res.sendStatus(200);
+    }else{
+        res.sendStatus(403);
+    }
+});
+
+app.post('/allow', (req, res) => {
+    acl.allow(req.body.project, '/project/' + req.body.project, 'admin');
+    acl.addUserRoles(req.body.username, req.body.project);
+    res.sendStatus(200);
+});
+
+app.get('/project/test', (req, res) => {
+    acl.allowedPermissions(req.user.username, 'test5', (err, roles) => {
+        res.send('Hello secure! #' + req.user.username + JSON.stringify(roles)  + JSON.stringify(err));
+    });
+
+});
+
+app.get('/project/:project/info', aclProject, (req, res) => {
+        res.send('Your project! #' + req.user.username);
+});
+
+/* API */
+app.post('/login', (req, res, next) => {
+    if (req.body.password && req.body.username) {
+        var sendToken = (user) => {
+            try {
+                delete user.password;
+                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresInMinutes: 60 * 6});
+                res.json({token: token});
+            } catch (e) {
+                console.log(e);
+                res.status(500).send(e);
+            }
+        };
+
+        redisClient.get('user:' + req.body.username, function(err, reply) {
+            if (reply) {
+                var user = JSON.parse(reply);
+                if (bcrypt.compareSync(req.body.password, user.password)) {
+                    sendToken(user);
+                } else {
+                    res.status(401).send('Wrong user or password');
+                }
+            } else {
+                //create Account
+                var password = bcrypt.hashSync(req.body.password, 10);
+                var newUser = {username: req.body.username, password: password};
+                redisClient.set('user:' + newUser.username, JSON.stringify(newUser), (err) => {
+                    if (err) {
+                        res.sendStatus(500);
+                    } else {
+                        sendToken(newUser);
+                    }
+                });
+            }
+        });
+    } else {
+        res.sendStatus(400);
+    }
 });
 
 /*
@@ -89,7 +221,8 @@ ZONE_DIGIT=>3, //top of the page id
 ZONE_BOX=>4,
 */
 
-function database(res, callback){
+function database(req, res, callback){
+    var project = req.params.project;
     var db = new sqlite3.Database('app/projects/' + project + '/data/capture.sqlite', (err) => {
         if (err){
             res.status(500).send(err);
@@ -119,9 +252,77 @@ function database(res, callback){
     });
 }
 
-app.get('/students', (req, res) => {
+/*
+version > 1.2.1 feature seuil-up not supported
+
+ */
+
+
+/* PROJECT Management */
+
+
+/* validation
+
+$delta=0.1
+# * {'NO_BOX} is a pointer on an array containing all the student
+#   numbers for which there is no box to be filled in the subject
+#
+# * {'NO_NAME'} is a pointer on an array containing all the student
+#   numbers for which there is no name field
+#
+# * {'SEVERAL_NAMES'} is a pointer on an array containing all the student
+#   numbers for which there is more than one name field
+'DEFECT_NO_BOX'=>
+       {'sql'=>"SELECT student FROM (SELECT student FROM ".$self->table("page")
+	." GROUP BY student) AS list"
+	." WHERE student>0 AND"
+	."   NOT EXISTS(SELECT * FROM ".$self->table("box")." AS local WHERE role=1 AND"
+	."              local.student=list.student)"},
+       'DEFECT_NO_NAME'=>
+       {'sql'=>"SELECT student FROM (SELECT student FROM ".$self->table("page")
+	." GROUP BY student) AS list"
+	." WHERE student>0 AND"
+	."   NOT EXISTS(SELECT * FROM ".$self->table("namefield")." AS local"
+	."              WHERE local.student=list.student)"},
+       'DEFECT_SEVERAL_NAMES'=>
+       {'sql'=>"SELECT student FROM (SELECT student,COUNT(*) AS n FROM "
+	.$self->table("namefield")." GROUP BY student) AS counts WHERE n>1"},
+# check_positions($delta) checks if all pages has the same positions
+# for marks and binary digits boxes. If this is the case (this SHOULD
+# allways be the case), check_positions returns undef. If not,
+# check_positions returns a hashref
+# {student_a=>S1,page_a=>P1,student_b=>S2,page_b=>P2} showing an
+# example for which (S1,P1) has not the same positions as (S2,P2)
+# (with difference over $delta for at least one coordinate).
+'checkPosDigits'=>
+       {'sql'=>"SELECT a.student AS student_a,b.student AS student_b,"
+	."         a.page AS page_a, b.page AS page_b,* FROM"
+	." (SELECT * FROM"
+	."   (SELECT * FROM ".$self->table("digit")
+	."    ORDER BY student DESC,page DESC)"
+	."  GROUP BY numberid,digitid) AS a,"
+	."  ".$self->table("digit")." AS b"
+	." ON a.digitid=b.digitid AND a.numberid=b.numberid"
+	."    AND (abs(a.xmin-b.xmin)>? OR abs(a.xmax-b.xmax)>?"
+	."         OR abs(a.ymin-b.ymin)>? OR abs(a.ymax-b.ymax)>?)"
+	." LIMIT 1"},
+       'checkPosMarks'=>
+       {'sql'=>"SELECT a.student AS student_a,b.student AS student_b,"
+	."         a.page AS page_a, b.page AS page_b,* FROM"
+	." (SELECT * FROM"
+	."   (SELECT * FROM ".$self->table("mark")
+	."    ORDER BY student DESC,page DESC)"
+	."  GROUP BY corner) AS a,"
+	."  ".$self->table("mark")." AS b"
+	." ON a.corner=b.corner"
+	."    AND (abs(a.x-b.x)>? OR abs(a.y-b.y)>?)"
+	." LIMIT 1"},
+*/
+
+
+app.get('/project/:project/students', aclProject, (req, res) => {
     // LIST OF STUDENTS with their name field and if matched
-    database(res, (db) => {
+    database(req, res, (db) => {
         var query = 'SELECT p.student, p.page, p.copy, z.image, a.manual, a.auto '
             + 'FROM capture_page p JOIN layout.layout_namefield l ON p.student=l.student AND p.page = l.page '
             + 'LEFT JOIN capture_zone z ON z.type = 2 AND z.student = p.student AND z.page = p.page AND z.copy = p.copy '
@@ -177,8 +378,8 @@ debug "Removing data capture for ".pageids_string(@id);
 
 */
 
-app.get('/missing', (req, res) => {
-    database(res, (db) => {
+app.get('/project/:project/missing', aclProject, (req, res) => {
+    database(req, res, (db) => {
         //TODO in future check that role=1 version>1.2.1
         var query = 'SELECT a.student as student, a.page as page, a.copy as copy, ok.page IS NULL as missing '
         + 'FROM (SELECT enter.student, enter.page, p.copy FROM ( '
@@ -222,9 +423,9 @@ app.get('/missing', (req, res) => {
 });
 
 
-app.get('/capture', (req, res) => {
-    database(res, (db) => {
-        var threshold = 0.15;
+app.get('/project/:project/capture', aclProject, (req, res) => {
+    database(req, res, (db) => {
+        var threshold = 0.5;
         var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
         + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
         + 'FROM capture_zone WHERE student=p.student AND page=p.page AND copy=p.copy AND type=4) s '
@@ -236,8 +437,8 @@ app.get('/capture', (req, res) => {
     });
 });
 
-app.get('/capture/:student/:page\::copy', (req, res) => {
-    database(res, (db) => {
+app.get('/project/:project/capture/:student/:page\::copy', aclProject, (req, res) => {
+    database(req, res, (db) => {
         var query = 'SELECT * FROM capture_page WHERE student=$student AND page=$page AND copy=$copy';
         db('get', query, {$student: req.params.student, $page: req.params.page, $copy: req.params.copy}, (row) => {
             res.json(row);
@@ -245,10 +446,15 @@ app.get('/capture/:student/:page\::copy', (req, res) => {
     });
 });
 
-app.get('/static/:image', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../app/projects/' + project + '/cr/' + req.params.image));
+app.get('/project/:project/static/:image', aclProject, (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../app/projects/' + req.params.project + '/cr/' + req.params.image));
 });
 
+/*
+page for question
+layout_box + layout_question
+
+*/
 
 /* ZONES */
 
@@ -263,8 +469,8 @@ if(params.student && params.page && params.copy) {
   println 'error required parameters: student, page and copy'
 }
 */
-app.get('/zones/:student/:page\::copy', (req, res) => {
-    database(res, (db) => {
+app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) => {
+    database(req, res, (db) => {
         var query = 'SELECT z.id_a AS question, z.id_b AS answer, z.total, z.black, '
         + 'z.manual, max(CASE WHEN p.corner = 1 THEN p.x END) as x0, '
         + 'max(CASE WHEN p.corner = 1 THEN p.y END) as y0, '
@@ -291,6 +497,20 @@ def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite
 //sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/layout.sqlite' AS layout")
 sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/scoring.sqlite' AS scoring")
 //sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/association.sqlite' AS assoc")
+
+scoring_score
+# * why is a small string that is used to know when special cases has
+#   been encountered:
+#
+#     E means syntax error (several boxes ticked for a simple
+#     question, or " none of the above" AND another box ticked for a
+#     multiple question).
+#
+#     V means that no box are ticked.
+#
+#     P means that a floor has been applied.
+
+
 */
 
 /*
@@ -398,9 +618,21 @@ sql.eachRow(query, [sql.firstRow("SELECT value FROM scoring.scoring_variables WH
     }
 }
 */
+//for acl middlware we have to handle its custom httperror
+app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
+    // Move on if everything is alright
+    if (!err) {
+        return next();
+    }
+    // Something is wrong, inform user
+    res.status(err.errorCode).send( err.msg);
+});
 
+if (env === 'development') {
+    app.use(errorHandler({ dumpExceptions: true, showStack: true }));
+}
 
-var server = app.listen(process.env.SERVER_PORT, '0.0.0.0');
+server.listen(process.env.SERVER_PORT, '0.0.0.0');
 server.on('listening', function(){
     console.log('server listening on port %d in %s mode', server.address().port, app.settings.env);
 });

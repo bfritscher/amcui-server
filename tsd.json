@@ -25,6 +25,39 @@
     },
     "errorhandler/errorhandler.d.ts": {
       "commit": "581563c4684d405afec14260ba79a89a52666c09"
+    },
+    "mkdirp/mkdirp.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "socket.io/socket.io.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "acl/acl.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "mongodb/mongodb.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "redis/redis.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "bluebird/bluebird.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "bcrypt/bcrypt.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "xml2js/xml2js.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "jsonwebtoken/jsonwebtoken.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "express-unless/express-unless.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "express-jwt/express-jwt.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
     }
   }
 }
