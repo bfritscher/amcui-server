@@ -17,3 +17,4 @@
 /// <reference path="jsonwebtoken/jsonwebtoken.d.ts" />
 /// <reference path="express-jwt/express-jwt.d.ts" />
 /// <reference path="express-unless/express-unless.d.ts" />
+/// <reference path="adm-zip/adm-zip.d.ts" />

@@ -33,6 +33,17 @@ declare module "connect-redis" {
     export = RedisStore;
 }
 
+declare module "connect-multiparty" {
+    import express = require("express");
+    module multiparty {
+        interface Request extends express.Request {
+            files:any;
+        }
+    }
+    function multiparty(): express.RequestHandler;
+    export = multiparty;
+}
+
 declare module "passport.socketio" {
     export function authorize(options:any):any;
 }

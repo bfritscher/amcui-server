@@ -18,6 +18,17 @@ import redis = require('redis');
 import xml2js = require('xml2js');
 import mkdirp = require('mkdirp');
 import Acl = require('acl');
+import multiparty = require('connect-multiparty');
+var multipartMiddleware = multiparty();
+//import AdmZip = require('adm-zip');
+/*
+var zip = new AdmZip("./my_file.zip");
+zip.extractAllTo(/target path/"/home/me/zipcontent/", /overwrite/true);
+zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment goes here");
+    // add local file
+    zip.addLocalFile("/home/me/some_picture.png");
+var willSendthis = zip.toBuffer();
+*/
 
 var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
 redisClient.on('error', function (err) {
@@ -61,7 +72,17 @@ ws.on('authenticated', function(socket) {
 });
 
 //secure /project with auth api
-app.use('/project', expressJwt({secret: process.env.JWT_SECRET}));
+app.use('/project', expressJwt({
+    secret: process.env.JWT_SECRET,
+    getToken: function fromHeaderOrQuerystring (req) {
+        if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
+            return req.headers.authorization.split(' ')[1];
+        } else if (req.query && req.query.token) {
+            return req.query.token;
+        }
+        return null;
+    }
+}));
 
 function aclProject(req, res, next){
     return <express.RequestHandler>acl.middleware(2, (req: express.Request, res) => {
@@ -72,6 +93,11 @@ function aclProject(req, res, next){
 /* TEST AREA */
 app.get('/', (req, res) => {
     res.send('Hello World3!');
+});
+
+app.post('/upload', multipartMiddleware, function (req: multiparty.Request, resp) {
+  console.log(req.body, req.files);
+  // don't forget to delete all req.files when done
 });
 
 app.get('/project/:project/config', (req, res) => {
@@ -141,7 +167,6 @@ app.post('/login', (req, res, next) => {
                 res.status(500).send(e);
             }
         };
-
         redisClient.get('user:' + req.body.username, function(err, reply) {
             if (reply) {
                 var user = JSON.parse(reply);
@@ -166,6 +191,12 @@ app.post('/login', (req, res, next) => {
     } else {
         res.sendStatus(400);
     }
+});
+
+app.get('/project/list', (req, res) => {
+    acl.userRoles(req.user.username, (err, roles) => {
+        res.json(roles);
+    });
 });
 
 /*
@@ -618,6 +649,7 @@ sql.eachRow(query, [sql.firstRow("SELECT value FROM scoring.scoring_variables WH
     }
 }
 */
+
 //for acl middlware we have to handle its custom httperror
 app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
     // Move on if everything is alright
@@ -625,7 +657,11 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
         return next();
     }
     // Something is wrong, inform user
-    res.status(err.errorCode).send( err.msg);
+    if (err.errorCode && err.msg) {
+        res.status(err.errorCode).json( err.msg );
+    } else {
+        next(err);
+    }
 });
 
 if (env === 'development') {

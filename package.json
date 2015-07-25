@@ -27,8 +27,10 @@
   "homepage": "https://github.com/bfritscher/amcui-server#readme",
   "dependencies": {
     "acl": "^0.4.7",
+    "adm-zip": "^0.4.7",
     "bcrypt": "^0.8.4",
     "body-parser": "^1.13.2",
+    "connect-multiparty": "^2.0.0",
     "cors": "^2.7.1",
     "dotenv": "^1.2.0",
     "errorhandler": "^1.4.1",
