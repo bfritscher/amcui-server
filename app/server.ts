@@ -2,7 +2,7 @@
 
 require('dotenv').load();
 require('source-map-support').install();
-import fs = require('fs');
+import fs = require('fs-extra');
 import cors = require('cors');
 import express = require('express');
 import io = require('socket.io');
@@ -29,6 +29,9 @@ zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment 
     zip.addLocalFile("/home/me/some_picture.png");
 var willSendthis = zip.toBuffer();
 */
+
+var APP_FOLDER = path.resolve(__dirname, '../app/');
+var PROJECTS_FOLDER = path.resolve(__dirname, '../app/projects/');
 
 var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
 redisClient.on('error', function (err) {
@@ -100,48 +103,7 @@ app.post('/upload', multipartMiddleware, function (req: multiparty.Request, resp
   // don't forget to delete all req.files when done
 });
 
-app.get('/project/:project/config', (req, res) => {
-    var filename = path.resolve(__dirname, '../app/projects/' + req.params.project + '/options.xml');
-    fs.readFile(filename, 'utf-8', function(err, data) {
-        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
-            var builder = new xml2js.Builder();
-            result.projetAMC.seuil = 1.0;
-            var xml = builder.buildObject(result);
-            fs.writeFile(filename, xml);
-            res.json(result.projetAMC.seuil);
-        });
-    });
-});
 
-
-app.get('/project/create/:project', (req, res) => {
-    // create project
-    var root = path.resolve(__dirname, '../app/projects/', req.params.project);
-    if (!fs.existsSync(root)) {
-        mkdirp.sync(root + '/cr/corrections/jpg');
-        mkdirp.sync(root + '/cr/corrections/pdf');
-        mkdirp.sync(root + '/cr/zooms');
-        mkdirp.sync(root + '/cr/diagnostic');
-        mkdirp.sync(root + '/data');
-        mkdirp.sync(root + '/scans');
-        mkdirp.sync(root + '/exports');
-        mkdirp.sync(root + '/src');
-        //option file
-        //role, resource, permission
-        acl.allow(req.params.project, '/project/' + req.params.project, 'admin');
-        //user, role
-        acl.addUserRoles(req.user.username, req.params.project);
-        res.sendStatus(200);
-    }else{
-        res.sendStatus(403);
-    }
-});
-
-app.post('/allow', (req, res) => {
-    acl.allow(req.body.project, '/project/' + req.body.project, 'admin');
-    acl.addUserRoles(req.body.username, req.body.project);
-    res.sendStatus(200);
-});
 
 app.get('/project/test', (req, res) => {
     acl.allowedPermissions(req.user.username, 'test5', (err, roles) => {
@@ -199,6 +161,65 @@ app.get('/project/list', (req, res) => {
     });
 });
 
+app.post('/project/create', (req, res) => {
+    // create project
+    var project = req.body.project;
+    var root = path.resolve(PROJECTS_FOLDER, project);
+    if (!fs.existsSync(root)) {
+        mkdirp.sync(root + '/cr/corrections/jpg');
+        mkdirp.sync(root + '/cr/corrections/pdf');
+        mkdirp.sync(root + '/cr/zooms');
+        mkdirp.sync(root + '/cr/diagnostic');
+        mkdirp.sync(root + '/data');
+        mkdirp.sync(root + '/scans');
+        mkdirp.sync(root + '/exports');
+        mkdirp.sync(root + '/src');
+        //copy default option file
+        fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
+        //role, resource, permission
+        acl.allow(project, '/project/' + project, 'admin');
+        //user, role
+        acl.addUserRoles(req.user.username, project);
+        res.sendStatus(200);
+    }else{
+        res.status(403).send('Project already exists!');
+    }
+});
+
+app.get('/project/:project/options', (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
+    fs.readFile(filename, 'utf-8', function(err, data) {
+        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
+            acl.roleUsers(req.params.project, (err, users) => {
+                res.json({options: result.projetAMC, users: users});
+            });
+        });
+    });
+});
+
+app.post('/project/:project/options', (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
+    var builder = new xml2js.Builder();
+    var xml = builder.buildObject({projetAMC: req.body.options});
+    fs.writeFile(filename, xml, function(err, data) {
+        if (err) {
+            res.sendStatus(500);
+        } else {
+            res.sendStatus(200);
+        }
+    });
+});
+
+app.post('/project/:project/add', (req, res) => {
+    acl.addUserRoles(req.body.username, req.params.project);
+    res.sendStatus(200);
+});
+
+app.post('/project/:project/remove', (req, res) => {
+    acl.removeUserRoles(req.body.username, req.params.project);
+    res.sendStatus(200);
+});
+
 /*
 
 Project Auth
@@ -242,21 +263,28 @@ annotate
 	-> reset and full annotate
 export /download pdfs
 
-
 */
-
 /*
 ZONE_FRAME=>1,
 ZONE_NAME=>2,
 ZONE_DIGIT=>3, //top of the page id
 ZONE_BOX=>4,
 */
+/* corner
+(1=TL, 2=TR, 3=BR, 4=BL)
+*/
+
+/* type
+POSITION_BOX=>1,
+POSITION_MEASURE=>2,
+*/
 
 function database(req, res, callback){
     var project = req.params.project;
     var db = new sqlite3.Database('app/projects/' + project + '/data/capture.sqlite', (err) => {
         if (err){
-            res.status(500).send(err);
+            res.status(500).end(JSON.stringify(err));
+            return;
         }
         db.serialize(() => {
             db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/layout.sqlite' AS layout");
@@ -264,7 +292,8 @@ function database(req, res, callback){
             var dbHandled = (method, query, params, success) => {
                 var internalCallback = (err, rows) => {
                     if (err){
-                        res.status(500).send(err);
+                        res.status(500).end(JSON.stringify(err));
+                        return;
                     }
                     if (success){
                         success(rows);
@@ -427,6 +456,9 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
         db('all', query, (rows) => {
             var seenTotal = [];
             var seenMissing = [];
+            if (!rows) {
+                rows = [];
+            }
             var results = rows.reduce((result, page) => {
                 var id = page.student + page.copy;
                 if (seenTotal.indexOf(id) < 0){
@@ -477,6 +509,31 @@ app.get('/project/:project/capture/:student/:page\::copy', aclProject, (req, res
     });
 });
 
+app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
+    database(req, res, (db) => {
+        var query = 'UPDATE capture_page SET timestamp_annotate=0, timestamp_manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
+        db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+            query = 'UPDATE capture_zone SET manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
+            db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+                res.sendStatus(200);
+            });
+        });
+    });
+});
+
+/* TODO: support insert for fully manual pages */
+app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
+    database(req, res, (db) => {
+        var query = "UPDATE capture_page SET timestamp_annotate=0, timestamp_manual=strftime('%s','now') WHERE student=$student AND page=$page AND copy=$copy";
+        db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+            query = 'UPDATE capture_zone SET manual=$manual WHERE student=$student AND page=$page AND copy=$copy AND type=$type AND id_a=$id_a AND id_b=$id_b';
+            db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy, $manual: req.body.manual, $type: req.body.type, $id_a: req.body.id_a, $id_b: req.body.id_b}, () => {
+                res.sendStatus(200);
+            });
+        });
+    });
+});
+
 app.get('/project/:project/static/:image', aclProject, (req, res) => {
     res.sendFile(path.resolve(__dirname, '../app/projects/' + req.params.project + '/cr/' + req.params.image));
 });
@@ -488,7 +545,7 @@ layout_box + layout_question
 */
 
 /* ZONES */
-
+//z.id_a AS question,z.id_b AS answer,
 /*
 def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
 //TODO handle errors

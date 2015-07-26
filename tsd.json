@@ -61,6 +61,9 @@
     },
     "adm-zip/adm-zip.d.ts": {
       "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "fs-extra/fs-extra.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
     }
   }
 }

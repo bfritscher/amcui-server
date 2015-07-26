@@ -18,3 +18,4 @@
 /// <reference path="express-jwt/express-jwt.d.ts" />
 /// <reference path="express-unless/express-unless.d.ts" />
 /// <reference path="adm-zip/adm-zip.d.ts" />
+/// <reference path="fs-extra/fs-extra.d.ts" />
