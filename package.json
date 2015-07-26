@@ -28,6 +28,7 @@
   "dependencies": {
     "acl": "^0.4.7",
     "adm-zip": "^0.4.7",
+    "archiver": "^0.14.4",
     "bcrypt": "^0.8.4",
     "body-parser": "^1.13.2",
     "connect-multiparty": "^2.0.0",
@@ -44,6 +45,7 @@
     "socketio-jwt": "^4.2.1",
     "source-map-support": "^0.3.2",
     "sqlite3": "^3.0.9",
+    "tmp": "0.0.26",
     "typescript": "^1.5.3",
     "xml2js": "^0.4.9"
   }

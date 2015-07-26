@@ -64,6 +64,9 @@
     },
     "fs-extra/fs-extra.d.ts": {
       "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
+    },
+    "tmp/tmp.d.ts": {
+      "commit": "f6c8ca47193fb67947944a3170912672ac3e908e"
     }
   }
 }

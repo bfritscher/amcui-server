@@ -51,3 +51,8 @@ declare module "passport.socketio" {
 declare module "socketio-jwt" {
     export function authorize(options:any):any;
 }
+
+declare module "archiver" {
+    function archiver(format:string):any;
+    export = archiver;
+}

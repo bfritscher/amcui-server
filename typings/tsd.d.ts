@@ -19,3 +19,4 @@
 /// <reference path="express-unless/express-unless.d.ts" />
 /// <reference path="adm-zip/adm-zip.d.ts" />
 /// <reference path="fs-extra/fs-extra.d.ts" />
+/// <reference path="tmp/tmp.d.ts" />

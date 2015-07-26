@@ -19,16 +19,11 @@ import xml2js = require('xml2js');
 import mkdirp = require('mkdirp');
 import Acl = require('acl');
 import multiparty = require('connect-multiparty');
-var multipartMiddleware = multiparty();
+import tmp = require('tmp');
+import childProcess = require('child_process');
 //import AdmZip = require('adm-zip');
-/*
-var zip = new AdmZip("./my_file.zip");
-zip.extractAllTo(/target path/"/home/me/zipcontent/", /overwrite/true);
-zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment goes here");
-    // add local file
-    zip.addLocalFile("/home/me/some_picture.png");
-var willSendthis = zip.toBuffer();
-*/
+import archiver = require('archiver');
+var multipartMiddleware = multiparty();
 
 var APP_FOLDER = path.resolve(__dirname, '../app/');
 var PROJECTS_FOLDER = path.resolve(__dirname, '../app/projects/');
@@ -93,191 +88,6 @@ function aclProject(req, res, next){
     }, 'admin')(req, res, next);
 }
 
-/* TEST AREA */
-app.get('/', (req, res) => {
-    res.send('Hello World3!');
-});
-
-app.post('/upload', multipartMiddleware, function (req: multiparty.Request, resp) {
-  console.log(req.body, req.files);
-  // don't forget to delete all req.files when done
-});
-
-
-
-app.get('/project/test', (req, res) => {
-    acl.allowedPermissions(req.user.username, 'test5', (err, roles) => {
-        res.send('Hello secure! #' + req.user.username + JSON.stringify(roles)  + JSON.stringify(err));
-    });
-
-});
-
-app.get('/project/:project/info', aclProject, (req, res) => {
-        res.send('Your project! #' + req.user.username);
-});
-
-/* API */
-app.post('/login', (req, res, next) => {
-    if (req.body.password && req.body.username) {
-        var sendToken = (user) => {
-            try {
-                delete user.password;
-                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresInMinutes: 60 * 6});
-                res.json({token: token});
-            } catch (e) {
-                console.log(e);
-                res.status(500).send(e);
-            }
-        };
-        redisClient.get('user:' + req.body.username, function(err, reply) {
-            if (reply) {
-                var user = JSON.parse(reply);
-                if (bcrypt.compareSync(req.body.password, user.password)) {
-                    sendToken(user);
-                } else {
-                    res.status(401).send('Wrong user or password');
-                }
-            } else {
-                //create Account
-                var password = bcrypt.hashSync(req.body.password, 10);
-                var newUser = {username: req.body.username, password: password};
-                redisClient.set('user:' + newUser.username, JSON.stringify(newUser), (err) => {
-                    if (err) {
-                        res.sendStatus(500);
-                    } else {
-                        sendToken(newUser);
-                    }
-                });
-            }
-        });
-    } else {
-        res.sendStatus(400);
-    }
-});
-
-app.get('/project/list', (req, res) => {
-    acl.userRoles(req.user.username, (err, roles) => {
-        res.json(roles);
-    });
-});
-
-app.post('/project/create', (req, res) => {
-    // create project
-    var project = req.body.project;
-    var root = path.resolve(PROJECTS_FOLDER, project);
-    if (!fs.existsSync(root)) {
-        mkdirp.sync(root + '/cr/corrections/jpg');
-        mkdirp.sync(root + '/cr/corrections/pdf');
-        mkdirp.sync(root + '/cr/zooms');
-        mkdirp.sync(root + '/cr/diagnostic');
-        mkdirp.sync(root + '/data');
-        mkdirp.sync(root + '/scans');
-        mkdirp.sync(root + '/exports');
-        mkdirp.sync(root + '/src');
-        //copy default option file
-        fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
-        //role, resource, permission
-        acl.allow(project, '/project/' + project, 'admin');
-        //user, role
-        acl.addUserRoles(req.user.username, project);
-        res.sendStatus(200);
-    }else{
-        res.status(403).send('Project already exists!');
-    }
-});
-
-app.get('/project/:project/options', (req, res) => {
-    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
-    fs.readFile(filename, 'utf-8', function(err, data) {
-        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
-            acl.roleUsers(req.params.project, (err, users) => {
-                res.json({options: result.projetAMC, users: users});
-            });
-        });
-    });
-});
-
-app.post('/project/:project/options', (req, res) => {
-    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
-    var builder = new xml2js.Builder();
-    var xml = builder.buildObject({projetAMC: req.body.options});
-    fs.writeFile(filename, xml, function(err, data) {
-        if (err) {
-            res.sendStatus(500);
-        } else {
-            res.sendStatus(200);
-        }
-    });
-});
-
-app.post('/project/:project/add', (req, res) => {
-    acl.addUserRoles(req.body.username, req.params.project);
-    res.sendStatus(200);
-});
-
-app.post('/project/:project/remove', (req, res) => {
-    acl.removeUserRoles(req.body.username, req.params.project);
-    res.sendStatus(200);
-});
-
-/*
-
-Project Auth
-
-Create a Project
-
-Change options of a project
-	-> some trigger other functions? (marks, annotations)
-
-List Project
-
-Upload a project?
-
-Edit Latex
-	-> recompute markings?
-
-Preview Latex
-
-Print
-   ->before check layout (user interaction?)
-
-Upload scans
-
-Get capture data state
-
-Manage manually pages
-	-> zones
-
-Upload students
-	-> auto map students
-Manual map students
-
-Display marks & question reports
-
-save formulas
-save custom csv data
-
-annotate
-	-> auto export current grade selection
-	-> options preview annotations on 1 copy
-	-> reset and full annotate
-export /download pdfs
-
-*/
-/*
-ZONE_FRAME=>1,
-ZONE_NAME=>2,
-ZONE_DIGIT=>3, //top of the page id
-ZONE_BOX=>4,
-*/
-/* corner
-(1=TL, 2=TR, 3=BR, 4=BL)
-*/
-
-/* type
-POSITION_BOX=>1,
-POSITION_MEASURE=>2,
-*/
 
 function database(req, res, callback){
     var project = req.params.project;
@@ -312,13 +122,247 @@ function database(req, res, callback){
     });
 }
 
+/* TEST AREA */
+app.get('/', (req, res) => {
+    res.send('Hello World3!');
+});
+
+app.get('/project/test', (req, res) => {
+    acl.allowedPermissions(req.user.username, 'test5', (err, roles) => {
+        res.send('Hello secure! #' + req.user.username + JSON.stringify(roles)  + JSON.stringify(err));
+    });
+
+});
+
+app.get('/project/:project/info', aclProject, (req, res) => {
+        res.send('Your project! #' + req.user.username);
+});
+
+/*
+Change options of a project
+	-> some trigger other functions? (marks, annotations)
+
+Upload a project?
+
+Edit Latex
+	-> recompute markings?
+
+Preview Latex
+
+Print
+   ->before check layout (user interaction?)
+
+Upload scans
+
+Get capture data state
+
+Upload students
+	-> auto map students
+Manual map students
+
+Display marks & question reports
+
+save formulas
+save custom csv data
+
+annotate
+	-> auto export current grade selection
+	-> options preview annotations on 1 copy
+	-> reset and full annotate
+export /download pdfs
+
+*/
+/*
+ZONE_FRAME=>1,
+ZONE_NAME=>2,
+ZONE_DIGIT=>3, //top of the page id
+ZONE_BOX=>4,
+*/
+/* corner
+(1=TL, 2=TR, 3=BR, 4=BL)
+*/
+
+/* type
+POSITION_BOX=>1,
+POSITION_MEASURE=>2,
+*/
+
+
 /*
 version > 1.2.1 feature seuil-up not supported
 
  */
 
+/* Project API */
+app.post('/login', (req, res, next) => {
+    if (req.body.password && req.body.username) {
+        var username = req.body.username.toLowerCase();
+        var sendToken = (user) => {
+            try {
+                delete user.password;
+                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresInMinutes: 60 * 6});
+                res.json({token: token});
+            } catch (e) {
+                console.log(e);
+                res.status(500).send(e);
+            }
+        };
+        redisClient.get('user:' + username, function(err, reply) {
+            if (reply) {
+                var user = JSON.parse(reply);
+                if (bcrypt.compareSync(req.body.password, user.password)) {
+                    sendToken(user);
+                } else {
+                    res.status(401).send('Wrong user or password');
+                }
+            } else {
+                //create Account
+                var password = bcrypt.hashSync(req.body.password, 10);
+                var newUser = {username: username, password: password};
+                redisClient.set('user:' + newUser.username, JSON.stringify(newUser), (err) => {
+                    if (err) {
+                        res.sendStatus(500);
+                    } else {
+                        sendToken(newUser);
+                    }
+                });
+            }
+        });
+    } else {
+        res.sendStatus(400);
+    }
+});
 
-/* PROJECT Management */
+app.get('/project/list', (req, res) => {
+    acl.userRoles(req.user.username, (err, roles) => {
+        res.json(roles);
+    });
+});
+
+app.post('/project/create', (req, res) => {
+    // create project
+    var project = req.body.project;
+    var root = path.resolve(PROJECTS_FOLDER, project);
+    if (!fs.existsSync(root)) {
+        mkdirp.sync(root + '/cr/corrections/jpg');
+        mkdirp.sync(root + '/cr/corrections/pdf');
+        mkdirp.sync(root + '/cr/zooms');
+        mkdirp.sync(root + '/cr/diagnostic');
+        mkdirp.sync(root + '/data');
+        mkdirp.sync(root + '/scans');
+        mkdirp.sync(root + '/exports');
+        mkdirp.sync(root + '/out');
+        mkdirp.sync(root + '/src');
+        //copy default option file
+        fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
+        //role, resource, permission
+        acl.allow(project, '/project/' + project, 'admin');
+        //user, role
+        acl.addUserRoles(req.user.username, project);
+        res.sendStatus(200);
+    }else{
+        res.status(403).send('Project already exists!');
+    }
+});
+
+app.get('/project/:project/options', aclProject, (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
+    fs.readFile(filename, 'utf-8', function(err, data) {
+        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
+            acl.roleUsers(req.params.project, (err, users) => {
+                res.json({options: result.projetAMC, users: users});
+            });
+        });
+    });
+});
+
+app.post('/project/:project/options', aclProject, (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
+    var builder = new xml2js.Builder();
+    var xml = builder.buildObject({projetAMC: req.body.options});
+    fs.writeFile(filename, xml, function(err, data) {
+        if (err) {
+            res.sendStatus(500);
+        } else {
+            res.sendStatus(200);
+        }
+    });
+});
+
+app.post('/project/:project/add', aclProject, (req, res) => {
+    acl.addUserRoles(req.body.username, req.params.project);
+    res.sendStatus(200);
+});
+
+app.post('/project/:project/remove', aclProject, (req, res) => {
+    acl.removeUserRoles(req.body.username, req.params.project);
+    res.sendStatus(200);
+});
+
+app.get('/project/:project/zip', aclProject, (req, res) => {
+    var zip = archiver('zip');
+    res.on('close', function() {
+        return res.sendStatus(200).end();
+    });
+    res.attachment(req.params.project + '.zip');
+    zip.pipe(res);
+    zip.directory(PROJECTS_FOLDER + '/' + req.params.project, req.params.project);
+    zip.finalize();
+});
+
+/*
+var zip = new AdmZip("./my_file.zip");
+zip.extractAllTo(/target path/"/home/me/zipcontent/", /overwrite/true);
+zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment goes here");
+    // add local file
+    zip.addLocalFile("/home/me/some_picture.png");
+var willSendthis = zip.toBuffer();
+*/
+
+
+/* EDIT */
+
+
+
+app.post('/project/:project/preview', aclProject, (req, res) => {
+    var OUT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/out';
+    fs.readdirSync(OUT_FOLDER).forEach((item) => {
+        fs.unlinkSync(OUT_FOLDER + '/' + item);
+    });
+    var amcPrepare = childProcess.spawn('auto-multiple-choice', [
+        'prepare', '--with', 'pdflatex', '--filter', 'latex',
+        '--out-corrige', 'out/out.pdf', '--mode', 'k',
+        '--n-copies', '1', 'source.tex', '--latex-stdout'
+    ], {
+        cwd: PROJECTS_FOLDER + '/' + req.params.project
+    });
+
+    var log = '';
+    amcPrepare.stdout.on('data', (data) => {
+        log += data;
+    });
+    amcPrepare.on('close', (code) => {
+        if (code !== 0){
+            res.json({log: log, error: code});
+        } else {
+            var convert = childProcess.spawn('convert', [
+                '-density', '120', 'out.pdf', 'out-%03d.png'
+            ], {
+                cwd: OUT_FOLDER
+            });
+            convert.on('close', () => {
+                var pages = fs.readdirSync(OUT_FOLDER).filter((item) => {
+                    return item.indexOf('.png') > 0;
+                });
+                res.json({log: log, pages: pages});
+            });
+        }
+    });
+});
+
+app.get('/project/:project/out/:image', aclProject, (req, res) => {
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/out/' + req.params.image);
+});
 
 
 /* validation
@@ -380,19 +424,6 @@ $delta=0.1
 */
 
 
-app.get('/project/:project/students', aclProject, (req, res) => {
-    // LIST OF STUDENTS with their name field and if matched
-    database(req, res, (db) => {
-        var query = 'SELECT p.student, p.page, p.copy, z.image, a.manual, a.auto '
-            + 'FROM capture_page p JOIN layout.layout_namefield l ON p.student=l.student AND p.page = l.page '
-            + 'LEFT JOIN capture_zone z ON z.type = 2 AND z.student = p.student AND z.page = p.page AND z.copy = p.copy '
-            + 'LEFT JOIN assoc.association_association a ON a.student = p.student AND a.copy = p.copy';
-
-        db('all', query, (rows) => {
-            res.json(rows);
-        });
-    });
-});
 
 /* CAPTURE*/
 
@@ -437,6 +468,23 @@ debug "Removing data capture for ".pageids_string(@id);
 
 
 */
+
+app.post('/project/:project/upload', aclProject, multipartMiddleware, function (req: multiparty.Request, res) {
+  fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'scans/', req.files.file.name));
+  // don't forget to delete all req.files when done
+  fs.unlinkSync(req.files.file.path);
+  tmp.file((err, path, fd, cleanup) => {
+      fs.writeFileSync(path, 'scans/' + req.files.file.name);
+      //need to call getimage with file to get path of extracted files...
+      //auto-multiple-choice getimages --progression-id analyse --vector-density 250 --orientation portrait --list path
+
+      //--multiple //if copies
+
+      //auto-multiple-choice analyse --multiple --tol-marque 0.2,0.2 --prop 0.8 --bw-threshold 0.6 --progression-id analyse --progression 1 --n-procs "0" --projet /home/amc/projects/test/ --liste-fichiers /tmp/liste-rvArAy
+
+  });
+  res.sendStatus(200);
+});
 
 app.get('/project/:project/missing', aclProject, (req, res) => {
     database(req, res, (db) => {
@@ -535,28 +583,11 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
 });
 
 app.get('/project/:project/static/:image', aclProject, (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../app/projects/' + req.params.project + '/cr/' + req.params.image));
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + req.params.image);
 });
 
-/*
-page for question
-layout_box + layout_question
-
-*/
-
 /* ZONES */
-//z.id_a AS question,z.id_b AS answer,
-/*
-def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
-//TODO handle errors
 
-if(params.student && params.page && params.copy) {
-    out << new JsonBuilder(sql.rows(''';''',
-        [params.student, params.page, params.copy]))
-}else{
-  println 'error required parameters: student, page and copy'
-}
-*/
 app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) => {
     database(req, res, (db) => {
         var query = 'SELECT z.id_a AS question, z.id_b AS answer, z.total, z.black, '
@@ -578,6 +609,30 @@ app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) 
         });
     });
 });
+
+/* GRADES */
+
+
+app.get('/project/:project/students', aclProject, (req, res) => {
+    // LIST OF STUDENTS with their name field and if matched
+    database(req, res, (db) => {
+        var query = 'SELECT p.student, p.page, p.copy, z.image, a.manual, a.auto '
+            + 'FROM capture_page p JOIN layout.layout_namefield l ON p.student=l.student AND p.page = l.page '
+            + 'LEFT JOIN capture_zone z ON z.type = 2 AND z.student = p.student AND z.page = p.page AND z.copy = p.copy '
+            + 'LEFT JOIN assoc.association_association a ON a.student = p.student AND a.copy = p.copy';
+
+        db('all', query, (rows) => {
+            res.json(rows);
+        });
+    });
+});
+
+/*
+
+linkt to page for question
+layout_box + layout_question
+
+*/
 
 /* REPORT */
 /*
