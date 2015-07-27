@@ -58,6 +58,18 @@ app.use(cors({
 }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({limit: '50mb'}));
+app.use(function(req, res, next){
+  if (req.is('text/*')) {
+    req.body = '';
+    req.setEncoding('utf8');
+    req.on('data', function(chunk){
+        req.body += chunk;
+    });
+    req.on('end', next);
+  } else {
+    next();
+  }
+});
 
 ws.on('connection', socketioJwt.authorize({
     secret: process.env.JWT_SECRET,
@@ -288,11 +300,15 @@ app.post('/project/create', (req, res) => {
 app.get('/project/:project/options', aclProject, (req, res) => {
     var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
     fs.readFile(filename, 'utf-8', function(err, data) {
-        xml2js.parseString(data, {explicitArray: false}, function (err, result) {
-            acl.roleUsers(req.params.project, (err, users) => {
-                res.json({options: result.projetAMC, users: users});
+        if (data){
+            xml2js.parseString(data, {explicitArray: false}, function (err, result) {
+                acl.roleUsers(req.params.project, (err, users) => {
+                    res.json({options: result.projetAMC, users: users});
+                });
             });
-        });
+        } else {
+            res.sendStatus(500);
+        }
     });
 });
 
@@ -567,8 +583,15 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
     });
 });
 
-//needed?
-//auto-multiple-choice note --data /home/amc/projects/test/data --seuil 0.6 --grain "" --arrondi normal --notemax 22 --plafond --notemin "" --progression-id notation --progression 1
+app.get('/project/:project/mark', aclProject, (req, res) => {
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    var threshold = 0.5;
+    amcCommande(res, PROJECT_FOLDER, [
+        'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
+        ], (log) => {
+            res.json({log: log});
+    });
+});
 
 app.get('/project/:project/missing', aclProject, (req, res) => {
     database(req, res, (db) => {
@@ -748,16 +771,65 @@ app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) 
 
 /* GRADES */
 
-//auto-multiple-choice association-auto --data /home/amc/projects/test/data --notes-id etu --liste /home/amc/projects/test/students.csv --liste-key matricule
-//auto-multiple-choice association-auto --data /home/amc/projects/test/data --set --student student-sheet-number --copy copy-number --id student-id
+app.post('/project/:project/csv', aclProject, (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+    fs.writeFile(filename, req.body, function(err, data) {
+        if (err) {
+            res.sendStatus(500).end();
+            return;
+        } else {
+            //try auto-match
+            //TODO get 'etu' from scoring_code?
+            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+                'association-auto', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
+                '--notes-id', 'etu', '--liste', filename, '--liste-key', 'id'
+            ], (log) => {
+                res.json({log: log});
+            });
+        }
+    });
+});
 
-app.get('/project/:project/students', aclProject, (req, res) => {
+app.get('/project/:project/csv', aclProject, (req, res) => {
+    res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv'));
+});
+
+//could do in db directly?
+app.post('/project/:project/association/manual', aclProject, (req, res) => {
+     amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+        'association', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
+        '--set', '--student', req.body.student, '--copy', req.body.copy, '--id', req.body.id
+    ], (log) => {
+        res.json({log: log});
+    });
+});
+
+
+app.get('/project/:project/names', aclProject, (req, res) => {
     // LIST OF STUDENTS with their name field and if matched
     database(req, res, (db) => {
         var query = 'SELECT p.student, p.page, p.copy, z.image, a.manual, a.auto '
             + 'FROM capture_page p JOIN layout.layout_namefield l ON p.student=l.student AND p.page = l.page '
             + 'LEFT JOIN capture_zone z ON z.type = 2 AND z.student = p.student AND z.page = p.page AND z.copy = p.copy '
             + 'LEFT JOIN assoc.association_association a ON a.student = p.student AND a.copy = p.copy';
+
+        db('all', query, (rows) => {
+            res.json(rows);
+        });
+    });
+});
+
+
+app.get('/project/:project/scores', aclProject, (req, res) => {
+    database(req, res, (db) => {
+        var query = 'SELECT COALESCE(aa.manual, aa.auto) AS id, ss.*, st.title, lb.page '
+            + 'FROM scoring_score ss '
+            + 'JOIN scoring_title st ON ss.question = st.question '
+            + 'JOIN scoring_question sq ON ss.question = sq.question AND '
+            + 'ss.student = sq.student AND sq.indicative = 0 '
+            + 'LEFT JOIN association_association aa ON aa.student = ss.student AND aa.copy = ss.copy '
+            + 'LEFT JOIN (SELECT student, page, question FROM layout_box GROUP BY student, page, question) lb ON lb.student = ss.student AND lb.question = ss.question '
+            + 'ORDER BY id, student, copy, title';
 
         db('all', query, (rows) => {
             res.json(rows);
