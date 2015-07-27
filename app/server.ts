@@ -252,6 +252,7 @@ app.post('/project/create', (req, res) => {
         mkdirp.sync(root + '/scans');
         mkdirp.sync(root + '/exports');
         mkdirp.sync(root + '/out');
+        mkdirp.sync(root + '/pdf');
         mkdirp.sync(root + '/src');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
@@ -322,6 +323,31 @@ var willSendthis = zip.toBuffer();
 
 /* EDIT */
 
+function amcCommande(res, cwd, params, callback){
+     var amcPrepare = childProcess.spawn('auto-multiple-choice', params, {
+        cwd: cwd
+    });
+
+    var log = '';
+    var errorlog = '';
+    amcPrepare.stdout.on('data', (data) => {
+        log += data;
+    });
+    amcPrepare.stderr.on('data', (data) => {
+        errorlog += data;
+    });
+    amcPrepare.on('close', (code) => {
+        if (code !== 0){
+            res.json({
+                log: log,
+                command: params,
+                errorlog: errorlog,
+                error: code});
+        } else {
+            callback(log);
+        }
+    });
+}
 
 
 app.post('/project/:project/preview', aclProject, (req, res) => {
@@ -329,34 +355,22 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
-    var amcPrepare = childProcess.spawn('auto-multiple-choice', [
+    amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
         'prepare', '--with', 'pdflatex', '--filter', 'latex',
         '--out-corrige', 'out/out.pdf', '--mode', 'k',
         '--n-copies', '1', 'source.tex', '--latex-stdout'
-    ], {
-        cwd: PROJECTS_FOLDER + '/' + req.params.project
-    });
-
-    var log = '';
-    amcPrepare.stdout.on('data', (data) => {
-        log += data;
-    });
-    amcPrepare.on('close', (code) => {
-        if (code !== 0){
-            res.json({log: log, error: code});
-        } else {
-            var convert = childProcess.spawn('convert', [
-                '-density', '120', 'out.pdf', 'out-%03d.png'
-            ], {
-                cwd: OUT_FOLDER
+    ], (log) => {
+        var convert = childProcess.spawn('convert', [
+            '-density', '120', 'out.pdf', 'out-%03d.png'
+        ], {
+            cwd: OUT_FOLDER
+        });
+        convert.on('close', () => {
+            var pages = fs.readdirSync(OUT_FOLDER).filter((item) => {
+                return item.indexOf('.png') > 0;
             });
-            convert.on('close', () => {
-                var pages = fs.readdirSync(OUT_FOLDER).filter((item) => {
-                    return item.indexOf('.png') > 0;
-                });
-                res.json({log: log, pages: pages});
-            });
-        }
+            res.json({log: log, pages: pages});
+        });
     });
 });
 
@@ -364,6 +378,87 @@ app.get('/project/:project/out/:image', aclProject, (req, res) => {
     res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/out/' + req.params.image);
 });
 
+/* PRINT */
+
+
+
+app.post('/project/:project/print', aclProject, (req, res) => {
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+
+    fs.readdirSync(PROJECT_FOLDER + 'pdf/').forEach((item) => {
+        fs.unlinkSync(PROJECT_FOLDER + 'pdf/' + item);
+    });
+
+    //sujet.pdf, catalog.pdf, calage.xy
+    amcCommande(res, PROJECT_FOLDER, [
+        'prepare', '--with', 'pdflatex', '--filter', 'latex',
+        '--mode', 's[c]', '--n-copies', '2', 'source.tex',
+        '--prefix', PROJECT_FOLDER, '--latex-stdout'
+    ], (logCatalog) => {
+        //corrige.pdf for all series
+        amcCommande(res, PROJECT_FOLDER, [
+            'prepare', '--with', 'pdflatex', '--filter', 'latex',
+            '--mode', 'k', '--n-copies', '2', 'source.tex',
+            '--prefix', PROJECT_FOLDER, '--latex-stdout'
+        ], (logCorrige) => {
+            //create capture and scoring db
+            amcCommande(res, PROJECT_FOLDER, [
+                'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
+                '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
+            ], (logScoring) => {
+                //create layout
+                amcCommande(res, PROJECT_FOLDER, [
+                    'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
+                     '--progression-id', 'MEP', '--progression 1'
+                ], (logLayout) => {
+                    //print
+                    // optional split answer --split
+                    amcCommande(res, PROJECT_FOLDER, [
+                        'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
+                        '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
+                         '--progression-id', 'impression', '--progression 1'
+                    ], (logPrint) => {
+                         var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
+                            return item.indexOf('.pdf') > 0;
+                        });
+                        res.json({
+                            logCatalog: logCatalog,
+                            logCorrige: logCorrige,
+                            logScoring: logScoring,
+                            logLayout: logLayout,
+                            logPrint: logPrint,
+                            pdfs: pdfs
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
+    var zip = archiver('zip');
+    res.on('close', function() {
+        return res.sendStatus(200).end();
+    });
+    res.attachment(req.params.project + '.zip');
+    zip.pipe(res);
+    zip.directory(PROJECTS_FOLDER + '/' + req.params.project + '/pdf', 'sujets');
+    zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/catalog.pdf', {name: 'catalog.pdf'});
+    zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/corrige.pdf', {name: 'corrige.pdf'});
+    zip.file(APP_FOLDER, 'assets/print.bat', {name: 'print.bat'});
+    zip.finalize();
+});
+
+
+/* TODO normalise between static, out, debug */
+app.get('/project/:project/debug/:file', aclProject, (req, res) => {
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + req.params.file);
+});
+
+/*
+
+*/
 
 /* validation
 
