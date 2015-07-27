@@ -98,7 +98,7 @@ function database(req, res, callback){
         }
         db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/layout.sqlite' AS layout", () => {
             db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/association.sqlite' AS assoc", () => {
-                db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/scoring.sqlite' AS score", () => {
+                db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/scoring.sqlite' AS scoring", () => {
                     var dbHandled = (method, query, params, success) => {
                         var internalCallback = (err, rows) => {
                             if (err){
@@ -620,6 +620,7 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
 
 app.get('/project/:project/capture', aclProject, (req, res) => {
     database(req, res, (db) => {
+        //TODO get $threshold
         var threshold = 0.5;
         var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
         + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
@@ -627,7 +628,7 @@ app.get('/project/:project/capture', aclProject, (req, res) => {
         + 'FROM capture_page p ORDER BY p.student, p.page, p.copy';
 
         db('all', query, {$threshold: threshold}, (rows) => {
-            res.json(rows);
+            res.json(rows || []);
         });
     });
 });
@@ -801,10 +802,6 @@ auto-multiple-choice regroupe --no-compose --projet /home/amc/projects/test/ --s
 */
 
 /*
-def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
-//sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/layout.sqlite' AS layout")
-sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/scoring.sqlite' AS scoring")
-//sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/association.sqlite' AS assoc")
 
 scoring_score
 # * why is a small string that is used to know when special cases has
@@ -821,111 +818,85 @@ scoring_score
 
 */
 
-/*
-original query from AMC
-     $dt=$self->{'_scoring'}->variable('darkness_threshold');
-         'tickedSums'=>{'sql'=>
-		    "SELECT * FROM (SELECT zone.id_a AS question,zone.id_b AS answer,SUM(CASE"
-		    ." WHEN why=\"V\" THEN 0"
-		    ." WHEN why=\"E\" THEN 0"
-		    ." WHEN zone.manual >= 0 THEN zone.manual"
-		    ." WHEN zone.total<=0 THEN -1"
-		    ." WHEN zone.black >= ? * zone.total THEN 1"
-		    ." ELSE 0"
-		    ." END) AS nb"
-		    ." FROM $t_zone AS zone, scoring.scoring_score AS score"
-		    ." ON zone.student=score.student AND zone.copy=score.copy AND zone.id_a=score.question"
-		    ." WHERE zone.type=? GROUP BY zone.id_a,zone.id_b)"
-		    ." UNION"
-		    ." SELECT * FROM (SELECT question,\"invalid\" AS answer,"
-		    ." COUNT(*)-COUNT(NULLIF(why,\"E\")) AS nb"
-		    ." FROM scoring.scoring_score"
-		    ." GROUP BY question)"
-		    ." UNION"
-		    ." SELECT * FROM (SELECT question,\"empty\" AS answer,"
-		    ." COUNT(*)-COUNT(NULLIF(why,\"V\")) AS nb"
-		    ." FROM scoring.scoring_score"
-		    ." GROUP BY question)"
-		    ." UNION"
-		    ." SELECT * FROM (SELECT question,\"all\" AS answer,COUNT(*) AS nb"
-		    ." FROM scoring.scoring_score"
-		    ." GROUP BY question)"
-*/
+app.get('/project/:project/stats', aclProject, (req, res) => {
+    //TODO check when updated in db vs options file?
+    database(req, res, (db) => {
+        var query = "SELECT value FROM scoring.scoring_variables WHERE name='darkness_threshold'";
+        db('get', query, (setting) => {
+            var threshold = 0.5; //TODO change?
+            if (setting && setting.value){
+                threshold = setting.value;
+            }
+            database(req, res, (db) => {
+                query = 'SELECT t.question, t.title, q.indicative, q.type, s.max, AVG(s.score) / s.max AS avg '
+                    + 'FROM scoring.scoring_title t JOIN scoring.scoring_question q ON  t.question = q.question '
+                    + 'LEFT JOIN scoring.scoring_score s ON s.question = t.question '
+                    + "WHERE q.strategy <> 'auto=0' "
+                    + 'GROUP BY t.question, t.title, q.indicative, q.type, s.max '
+                    + 'ORDER BY t.question';
 
-/*
-def query = '''
-SELECT question, 'all' AS answer, COUNT(*) AS nb,
-0 as correct
-FROM scoring.scoring_score
-GROUP BY question
-UNION
-SELECT question, 'invalid' AS answer, COUNT(*)-COUNT(NULLIF(why,'E')) AS nb,
-3 as correct
-FROM scoring.scoring_score
-GROUP BY question
-UNION
-SELECT question, 'empty' AS answer, COUNT(*)-COUNT(NULLIF(why,'V')) AS nb,
-2 as correct
-FROM scoring.scoring_score
-GROUP BY question
-UNION
-SELECT s.question AS question, z.id_b AS answer,
-SUM(CASE
-WHEN s.why='V' THEN 0
-WHEN s.why='E' THEN 0
-WHEN z.manual >= 0 THEN z.manual
-WHEN z.total<=0 THEN 0
-WHEN z.black >= ?1 * z.total THEN 1
-ELSE 0
-END) AS nb, a.correct AS correct
-FROM capture_zone z JOIN scoring.scoring_score s
-ON z.student = s.student AND
-z.copy = s.copy AND
-s.question = z.id_a
-AND z.type = 4
-JOIN scoring.scoring_answer a ON a.student = s.student
-AND a.question = s.question
-AND z.id_b = a.answer
-GROUP BY z.id_a, z.id_b, a.correct
-'''
+                db('all', query, (questionsList) => {
+                    var questions = {};
+                    questionsList.forEach((question) => {
+                        question.answers = [];
+                        questions[question.question] = question;
+                    });
+                    database(req, res, (db) => {
+                        query = "SELECT question, 'all' AS answer, COUNT(*) AS nb, "
+                            + '0 as correct '
+                            + 'FROM scoring.scoring_score '
+                            + 'GROUP BY question '
+                            + 'UNION '
+                            + "SELECT question, 'invalid' AS answer, COUNT(*)-COUNT(NULLIF(why,'E')) AS nb, "
+                            + '3 as correct '
+                            + 'FROM scoring.scoring_score '
+                            + 'GROUP BY question '
+                            + 'UNION '
+                            + "SELECT question, 'empty' AS answer, COUNT(*)-COUNT(NULLIF(why,'V')) AS nb, "
+                            + '2 as correct '
+                            + 'FROM scoring.scoring_score '
+                            + 'GROUP BY question '
+                            + 'UNION '
+                            + 'SELECT s.question AS question, z.id_b AS answer, '
+                            + 'SUM(CASE '
+                            + "WHEN s.why='V' THEN 0 "
+                            + "WHEN s.why='E' THEN 0 "
+                            + 'WHEN z.manual >= 0 THEN z.manual '
+                            + 'WHEN z.total<=0 THEN 0 '
+                            + 'WHEN z.black >= $threshold * z.total THEN 1 '
+                            + 'ELSE 0 '
+                            + 'END) AS nb, a.correct AS correct '
+                            + 'FROM capture_zone z JOIN scoring.scoring_score s '
+                            + 'ON z.student = s.student AND '
+                            + 'z.copy = s.copy AND '
+                            + 's.question = z.id_a '
+                            + 'AND z.type = 4 '
+                            + 'JOIN scoring.scoring_answer a ON a.student = s.student '
+                            + 'AND a.question = s.question '
+                            + 'AND z.id_b = a.answer '
+                            + 'GROUP BY z.id_a, z.id_b, a.correct';
 
-def query2 = '''SELECT t.question, t.title, q.indicative, q.type, s.max, AVG(s.score) / s.max AS avg
-FROM scoring.scoring_title t JOIN scoring.scoring_question q ON  t.question = q.question
-LEFT JOIN scoring.scoring_score s ON s.question = t.question
-WHERE q.strategy <> 'auto=0'
-GROUP BY t.question, t.title, q.indicative, q.type, s.max
-ORDER BY t.question
-'''
+                        db('all', query, {$threshold: threshold}, (rows) => {
+                            rows.forEach((row) => {
+                                if (questions[row.question]){
+                                    if (row.answer === 'all'){
+                                        questions[row.question].total = row.nb;
+                                    } else {
+                                        questions[row.question].answers.push(row);
+                                    }
+                                }
+                            });
+                            res.json(questionsList.map((q) => {
+                                return questions[q.question];
+                            }));
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
 
-def questions = [:]
-
-
-sql.eachRow(query2){ row ->
-    def a = new Expando()
-    a.question = row.question
-    a.title = row.title
-    a.indicative = row.indicative
-    a.type = row.type
-    a.max = row.max
-    a.avg = row.avg
-    a.answers = []
-    questions[row.question] = a
-}
-
-sql.eachRow(query, [sql.firstRow("SELECT value FROM scoring.scoring_variables WHERE name='darkness_threshold'").value]){ row ->
-    if(questions[row.question]){
-        if(row.answer == 'all'){
-            questions[row.question].total = row.nb
-        }else{
-            def a = new Expando()
-            a.answer = row.answer
-            a.nb = row.nb
-            a.correct = row.correct
-            questions[row.question].answers << a
-        }
-    }
-}
-*/
 
 //for acl middlware we have to handle its custom httperror
 app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
