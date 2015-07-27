@@ -96,28 +96,47 @@ function database(req, res, callback){
             res.status(500).end(JSON.stringify(err));
             return;
         }
-        db.serialize(() => {
-            db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/layout.sqlite' AS layout");
-            db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/association.sqlite' AS assoc");
-            var dbHandled = (method, query, params, success) => {
-                var internalCallback = (err, rows) => {
-                    if (err){
-                        res.status(500).end(JSON.stringify(err));
-                        return;
-                    }
-                    if (success){
-                        success(rows);
-                    } else {
-                        params(rows);
-                    }
-                };
-                if (success){
-                    db[method](query, params, internalCallback);
-                } else {
-                    db[method](query, internalCallback);
-                }
-            };
-            callback(dbHandled);
+        db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/layout.sqlite' AS layout", () => {
+            db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/association.sqlite' AS assoc", () => {
+                db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/scoring.sqlite' AS score", () => {
+                    var dbHandled = (method, query, params, success) => {
+                        var internalCallback = (err, rows) => {
+                            if (err){
+                                res.status(500).end(JSON.stringify(err));
+                                return;
+                            }
+                            if (success){
+                                success(rows);
+                            } else {
+                                params(rows);
+                            }
+                        };
+
+                        if (success){
+                            db[method](query, params, internalCallback);
+                        } else {
+                            db[method](query, internalCallback);
+                        }
+/*
+                        var tryDBCall = () => {
+                            try {
+
+                            } catch (e) {
+                                console.log('ERROR.TEST', e);
+                                if (e.name === 'SQLITE_BUSY'){
+                                    setTimeout(tryDBCall, 1000);
+                                } else {
+                                    throw e;
+                                }
+                            }
+                        };
+                        tryDBCall();
+*/
+
+                    };
+                    callback(dbHandled);
+                });
+            });
         });
     });
 }
@@ -522,64 +541,34 @@ $delta=0.1
 
 /* CAPTURE*/
 
-/*
-debug "Removing data capture for ".pageids_string(@id);
-	#
-	# 1) get image files generated, and remove them
-	#
-	my $crdir=$shortcuts->absolu($projet{'options'}->{'cr'});
-	my @files=();
-	#
-	# scan file
-	push @files,$shortcuts->absolu($projet{'_capture'}->get_scan_page(@id));
-	#
-	# layout image, in cr directory
-	push @files,$crdir.'/'
-	  .$projet{'_capture'}->get_layout_image(@id);
-	#
-	# annotated scan
-	push @files,$crdir.'/corrections/jpg/'
-	  .$projet{'_capture'}->get_annotated_page(@id);
-	#
-	# zooms
-	push @files,map { $crdir.'/zooms/'.$_ } grep { defined($_) }
-	  ($projet{'_capture'}->get_zones_images(@id,ZONE_BOX));
-	#
-	for (@files) {
-	  if (-f $_) {
-	    debug "Removing $_";
-	    unlink($_);
-	  }
-	}
-	#
-	# 2) remove data from database
-	#
-	$projet{'_capture'}->delete_page_data(@id);
-
-	if($projet{'options'}->{'auto_capture_mode'} == 1) {
-	  $projet{'_scoring'}->delete_scoring_data(@id[0,2]);
-	  $projet{'_association'}->delete_association_data(@id[0,2]);
-	}
-
-
-*/
-
-app.post('/project/:project/upload', aclProject, multipartMiddleware, function (req: multiparty.Request, res) {
-  fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'scans/', req.files.file.name));
-  // don't forget to delete all req.files when done
-  fs.unlinkSync(req.files.file.path);
-  tmp.file((err, path, fd, cleanup) => {
-      fs.writeFileSync(path, 'scans/' + req.files.file.name);
-      //need to call getimage with file to get path of extracted files...
-      //auto-multiple-choice getimages --progression-id analyse --vector-density 250 --orientation portrait --list path
-
-      //--multiple //if copies
-
-      //auto-multiple-choice analyse --multiple --tol-marque 0.2,0.2 --prop 0.8 --bw-threshold 0.6 --progression-id analyse --progression 1 --n-procs "0" --projet /home/amc/projects/test/ --liste-fichiers /tmp/liste-rvArAy
-
-  });
-  res.sendStatus(200);
+app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'scans/', req.files.file.name));
+    // don't forget to delete all req.files when done
+    fs.unlinkSync(req.files.file.path);
+    tmp.file((err, path, fd, cleanup) => {
+        fs.writeFileSync(path, 'scans/' + req.files.file.name);
+        //need to call getimage with file to get path of extracted files...
+        amcCommande(res, PROJECT_FOLDER, [
+            'getimages', '--progression-id', 'analyse', '--vector-density', '250', '--orientation', 'portrait', '--list', path
+        ], (logImages) => {
+            var params = [
+                'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
+                '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
+            ];
+            //--multiple //if copies
+            amcCommande(res, PROJECT_FOLDER, params, (logAnalyse) => {
+                res.json({
+                    logImages: logImages,
+                    logAnalyse: logAnalyse
+                });
+            });
+        });
+    });
 });
+
+//needed?
+//auto-multiple-choice note --data /home/amc/projects/test/data --seuil 0.6 --grain "" --arrondi normal --notemax 22 --plafond --notemin "" --progression-id notation --progression 1
 
 app.get('/project/:project/missing', aclProject, (req, res) => {
     database(req, res, (db) => {
@@ -677,6 +666,57 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
     });
 });
 
+app.post('/project/:project/capture/delete', aclProject, (req, res) => {
+	/*
+	1) get image files generated, and remove them
+    scan file, layout image, in cr directory, annotated scan, zooms
+    */
+    database(req, res, (db) => {
+
+        var query = "SELECT replace(src, '%PROJET/', '') as path FROM capture_page "
+        + 'WHERE student=$student AND page=$page AND copy=$copy '
+        + 'UNION '
+        + "SELECT 'cr/' || layout_image FROM capture_page "
+        + 'WHERE student=$student AND page=$page AND copy=$copy '
+        + 'UNION '
+        + "SELECT 'cr/corrections/jpg/' || annotated FROM capture_page "
+        + 'WHERE student=$student AND page=$page AND copy=$copy '
+        + 'UNION '
+        + "SELECT 'cr/' || image FROM capture_zone "
+        + 'WHERE student=$student AND page=$page AND copy=$copy AND image IS NOT NULL';
+        db('all', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, (rows) => {
+            rows.forEach((row) => {
+                fs.unlink( PROJECTS_FOLDER + '/' + req.params.project + '/' + row.path, (err) => {
+                    console.log(err);
+                });
+            });
+            // 2) remove data from database
+            db('run', 'DELETE FROM capture_position WHERE zoneid IN (SELECT zoneid FROM capture_zone WHERE student=$student AND page=$page AND copy=$copy)',
+            {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+                db('run', 'DELETE FROM capture_zone WHERE student=$student AND page=$page AND copy=$copy',
+                {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+                    db('run', 'DELETE FROM capture_page WHERE student=$student AND page=$page AND copy=$copy',
+                    {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+                        db('run', 'DELETE FROM scoring_score WHERE student=$student AND copy=$copy',
+                        {$student: req.body.student, $copy: req.body.copy}, () => {
+                            db('run', 'DELETE FROM scoring_mark WHERE student=$student AND copy=$copy',
+                            {$student: req.body.student, $copy: req.body.copy}, () => {
+                                db('run', 'DELETE FROM scoring_code WHERE student=$student AND copy=$copy',
+                                {$student: req.body.student, $copy: req.body.copy}, () => {
+                                    db('run', 'DELETE FROM association_association WHERE student=$student AND copy=$copy',
+                                    {$student: req.body.student, $copy: req.body.copy}, () => {
+                                        res.sendStatus(200);
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
 app.get('/project/:project/static/:image', aclProject, (req, res) => {
     res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + req.params.image);
 });
@@ -707,6 +747,8 @@ app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) 
 
 /* GRADES */
 
+//auto-multiple-choice association-auto --data /home/amc/projects/test/data --notes-id etu --liste /home/amc/projects/test/students.csv --liste-key matricule
+//auto-multiple-choice association-auto --data /home/amc/projects/test/data --set --student student-sheet-number --copy copy-number --id student-id
 
 app.get('/project/:project/students', aclProject, (req, res) => {
     // LIST OF STUDENTS with their name field and if matched
@@ -730,6 +772,34 @@ layout_box + layout_question
 */
 
 /* REPORT */
+
+//auto-multiple-choice export --module ods --data /home/amc/projects/test/data --useall 1 --sort l --fich-noms /home/amc/projects/test/students.csv --output /home/amc/projects/test/exports/export.ods --option-out nom="hello world" --option-out groupsums=1 --option-out stats=1 --option-out columns=student.copy,student.key,student.name --option-out statsindic=1
+
+/*
+ANNOTATE
+
+before CLEAN jpg and pdf!
+
+>> auto-multiple-choice annote --xmlargs /tmp/AMC-PACK-xG4VfWxw.xml
+[  15956,   0.11] Unpacked args: --debug /tmp/AMC-DEBUG-rB9THe_H.log --progression-id annote --progression 1 --projet /home/boris/MC-Projects/test/ --projets /home/boris/MC-Projects/ --ch-sign 2 --cr /home/boris/MC-Projects/test/cr --data /home/boris/MC-Projects/test/data --id-file  --taille-max 1000x1500 --qualite 100 --line-width 2 --indicatives  --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec --position marge --pointsize-nl 60 --verdict "%(name) (%(matricule)) Note: %(note final)"
+TP: %(tp), score: %S/%M --verdict-question "%s/%m" --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --no-rtl --changes-only
+
+//http://home.gna.org/auto-qcm/auto-multiple-choice.en/AMC-annote.shtml
+auto-multiple-choice annote --progression-id annote --progression 1 --projet /home/amc/projects/test --projets /home/amc/projects/ --ch-sign 2 --cr /home/amc/projects/test/cr --data /home/amc/projects/test/data --taille-max 1000x1500 --qualite 100 --line-width 2 --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec --position marge --pointsize-nl 60  --verdict "%(name) (%(matricule)) Note: %(note final)\bTP: %(tp), score: %S/%M" --verdict-question "%s/%m" --fich-noms /home/amc/projects/test/notes.csv --changes-only
+
+>> auto-multiple-choice regroupe --xmlargs /tmp/AMC-PACK-4LVxmEEG.xml
+[  15959,   0.09] Unpacked args: --debug /tmp/AMC-DEBUG-rB9THe_H.log --id-file  --no-compose --projet /home/boris/MC-Projects/test/ --sujet /home/boris/MC-Projects/test/DOC-sujet.pdf --data /home/boris/MC-Projects/test/data --tex-src /home/boris/MC-Projects/test/source.tex --with pdflatex --filter latex --filtered-source /home/boris/MC-Projects/test/DOC-filtered.tex --n-copies 4 --progression-id regroupe --progression 1 --modele (name) --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --single-output  --sort l --register --no-force-ascii
+[  15959,   0.09] dir = /tmp/AcxYeia14o
+
+(N)
+is replaced by the student's name.
+(ID)
+is replaced by the student number.
+(COL)
+
+auto-multiple-choice regroupe --no-compose --projet /home/amc/projects/test/ --sujet /home/amc/projects/test/sujet.pdf --data /home/amc/projects/test/data --progression-id regroupe --progression 1 --modele "(name)" --fich-noms /home/amc/projects/test/notes.csv --register --no-force-ascii
+*/
+
 /*
 def sql = Sql.newInstance("jdbc:sqlite:webapps/amcui/project/data/capture.sqlite", "org.sqlite.JDBC")
 //sql.execute("ATTACH DATABASE 'webapps/amcui/project/data/layout.sqlite' AS layout")
