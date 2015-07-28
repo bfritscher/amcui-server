@@ -480,8 +480,13 @@ app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
 
 
 /* TODO normalise between static, out, debug */
-app.get('/project/:project/debug/:file', aclProject, (req, res) => {
-    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + req.params.file);
+app.get('/project/:project/debug/:file*', aclProject, (req, res) => {
+    console.log(req.params);
+    var file = req.params.file;
+    if (req.params.hasOwnProperty(0)){
+        file += req.params[0];
+    }
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + file);
 });
 
 /*
@@ -850,6 +855,65 @@ app.get('/project/:project/ods', aclProject, (req, res) => {
 /*
 ANNOTATE
 
+*/
+//(%(matricule)) Note: %(note final)\bTP: %(tp),
+app.post('/project/:project/annotate', aclProject, (req, res) => {
+    tmp.file((err, tmpFile, fd, cleanup) => {
+        var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+        var params = [
+            'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
+            '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
+            '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
+            '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',
+            '--position', 'marge', '--pointsize-nl', '60', '--verdict', '%(name) score: %S/%M',
+            '--verdict-question', '"%s/%m"',
+            '--fich-noms', filename,
+            '--no-changes-only',
+            '--ecart-marge', '2'];
+        if (req.body.ids) {
+            req.body.ids.forEach((id) => {
+                fs.writeFileSync(tmpFile, id);
+            });
+            params.push('--id-file');
+            params.push(tmpFile);
+        }
+        amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logAnnote) => {
+            params = [
+                'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
+                '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
+                '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
+                '--progression-id', 'regroupe', '--progression', '1',
+                '--modele', '(name)',
+                '--fich-noms', filename, '--register --no-rename'
+            ];
+            if (req.body.ids) {
+                params.push('--id-file');
+                params.push(tmpFile);
+            }
+            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logRegroupe) => {
+                cleanup();
+                res.json({
+                    logAnnote: logAnnote,
+                    logRegroupe: logRegroupe
+                });
+            });
+        });
+    });
+});
+
+app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
+    var zip = archiver('zip');
+    res.on('close', function() {
+        return res.sendStatus(200).end();
+    });
+    res.attachment(req.params.project + '_annotate.zip');
+    zip.pipe(res);
+    zip.directory(PROJECTS_FOLDER + '/' + req.params.project + '/cr/corrections/pdf', 'annotate');
+    zip.finalize();
+});
+/*
+
+
 before CLEAN jpg and pdf!
 
 >> auto-multiple-choice annote --xmlargs /tmp/AMC-PACK-xG4VfWxw.xml
@@ -857,7 +921,15 @@ before CLEAN jpg and pdf!
 TP: %(tp), score: %S/%M --verdict-question "%s/%m" --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --no-rtl --changes-only
 
 //http://home.gna.org/auto-qcm/auto-multiple-choice.en/AMC-annote.shtml
-auto-multiple-choice annote --progression-id annote --progression 1 --projet /home/amc/projects/test --projets /home/amc/projects/ --ch-sign 2 --cr /home/amc/projects/test/cr --data /home/amc/projects/test/data --taille-max 1000x1500 --qualite 100 --line-width 2 --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec --position marge --pointsize-nl 60  --verdict "%(name) (%(matricule)) Note: %(note final)\bTP: %(tp), score: %S/%M" --verdict-question "%s/%m" --fich-noms /home/amc/projects/test/notes.csv --changes-only
+auto-multiple-choice annote --progression-id annote --progression 1 --projet /home/amc/projects/test
+ --ch-sign 2  --taille-max 1000x1500 --qualite 100 --line-width 2
+ --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec
+ --position marge --pointsize-nl 60  --verdict "%(name) (%(matricule)) Note: %(note final)\bTP: %(tp), score: %S/%M"
+  --verdict-question "%s/%m"
+  --fich-noms /home/amc/projects/test/notes.csv
+  --ecart-marge 2
+  --id-file
+  //--changes-only
 
 >> auto-multiple-choice regroupe --xmlargs /tmp/AMC-PACK-4LVxmEEG.xml
 [  15959,   0.09] Unpacked args: --debug /tmp/AMC-DEBUG-rB9THe_H.log --id-file  --no-compose --projet /home/boris/MC-Projects/test/ --sujet /home/boris/MC-Projects/test/DOC-sujet.pdf --data /home/boris/MC-Projects/test/data --tex-src /home/boris/MC-Projects/test/source.tex --with pdflatex --filter latex --filtered-source /home/boris/MC-Projects/test/DOC-filtered.tex --n-copies 4 --progression-id regroupe --progression 1 --modele (name) --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --single-output  --sort l --register --no-force-ascii
@@ -869,7 +941,14 @@ is replaced by the student's name.
 is replaced by the student number.
 (COL)
 
-auto-multiple-choice regroupe --no-compose --projet /home/amc/projects/test/ --sujet /home/amc/projects/test/sujet.pdf --data /home/amc/projects/test/data --progression-id regroupe --progression 1 --modele "(name)" --fich-noms /home/amc/projects/test/notes.csv --register --no-force-ascii
+auto-multiple-choice regroupe
+--no-compose --projet /home/amc/projects/test/
+--sujet /home/amc/projects/test/sujet.pdf
+ --data /home/amc/projects/test/data
+ --progression-id regroupe --progression 1
+ --modele "(name)"
+ --fich-noms /home/amc/projects/test/notes.csv
+  --register
 */
 
 /*
