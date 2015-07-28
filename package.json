@@ -33,6 +33,7 @@
     "body-parser": "^1.13.2",
     "connect-multiparty": "^2.0.0",
     "cors": "^2.7.1",
+    "diffsync": "^2.1.2",
     "dotenv": "^1.2.0",
     "errorhandler": "^1.4.1",
     "express": "^4.13.1",

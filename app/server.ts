@@ -23,6 +23,9 @@ import tmp = require('tmp');
 import childProcess = require('child_process');
 //import AdmZip = require('adm-zip');
 import archiver = require('archiver');
+import diffSync= require('diffsync');
+import redisDataAdapter = require('./diffsyncredis');
+
 var multipartMiddleware = multiparty();
 
 var APP_FOLDER = path.resolve(__dirname, '../app/');
@@ -32,13 +35,54 @@ var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, proce
 redisClient.on('error', function (err) {
     console.log('Redis error ' + err);
 });
-var acl = new Acl(new Acl.redisBackend(redisClient, 'acl'), {debug: (txt) => {
+var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
+/*
+    , {debug: (txt) => {
     console.log(JSON.stringify(txt));
-}});
+}}
+*/);
+
 
 var app = express();
 var server = require('http').Server(app);
 var ws = io(server);
+
+
+ws.use(socketioJwt.authorize({
+    secret: process.env.JWT_SECRET,
+    timeout: 15000, // 15 seconds to send the authentication message
+    handshake: true
+}));
+
+ws.on('connection', (socket) => {
+    //this socket is authenticated, we are good to handle more events from it.
+    var username = (<any>socket).decoded_token.username;
+    socket.emit('msg', username);
+
+    socket.on('diffsync-join', (data) => {
+        acl.hasRole(username, data, (err, hasRole) => {
+            if (!hasRole) {
+                socket.disconnect(true);
+            }
+        });
+    });
+
+    socket.on('diffsync-send-edit', (data) => {
+        var room = data;
+        if (data.hasOwnProperty('room')){
+            room = data.room;
+        }
+        acl.hasRole(username, room, (err, hasRole) => {
+            if (!hasRole) {
+                socket.disconnect(true);
+            }
+        });
+    });
+});
+
+var dataAdapter = new redisDataAdapter(redisClient, 'exam');
+var diffSyncServer = new diffSync.Server(dataAdapter, ws);
+console.log(diffSyncServer);
 
 var env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
@@ -69,16 +113,6 @@ app.use(function(req, res, next){
   } else {
     next();
   }
-});
-
-ws.on('connection', socketioJwt.authorize({
-    secret: process.env.JWT_SECRET,
-    timeout: 15000 // 15 seconds to send the authentication message
-  }));
-
-ws.on('authenticated', function(socket) {
-    //this socket is authenticated, we are good to handle more events from it.
-    console.log('hello! ' + socket.decoded_token.id);
 });
 
 //secure /project with auth api
@@ -129,22 +163,6 @@ function database(req, res, callback){
                         } else {
                             db[method](query, internalCallback);
                         }
-/*
-                        var tryDBCall = () => {
-                            try {
-
-                            } catch (e) {
-                                console.log('ERROR.TEST', e);
-                                if (e.name === 'SQLITE_BUSY'){
-                                    setTimeout(tryDBCall, 1000);
-                                } else {
-                                    throw e;
-                                }
-                            }
-                        };
-                        tryDBCall();
-*/
-
                     };
                     callback(dbHandled);
                 });
@@ -265,7 +283,7 @@ app.get('/project/list', (req, res) => {
 
 app.post('/project/create', (req, res) => {
     // create project
-    var project = req.body.project;
+    var project = req.body.project.toLowerCase();
     var root = path.resolve(PROJECTS_FOLDER, project);
     if (!fs.existsSync(root)) {
         mkdirp.sync(root + '/cr/corrections/jpg');

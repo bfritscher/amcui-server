@@ -49,10 +49,19 @@ declare module "passport.socketio" {
 }
 
 declare module "socketio-jwt" {
-    export function authorize(options:any):any;
+    function authorize(options:any):any;
 }
 
 declare module "archiver" {
     function archiver(format:string):any;
     export = archiver;
+}
+
+declare module "diffsync" {
+    export var InMemoryDataAdapter:{
+        new():any;
+    };
+    export var Server:{
+        new(dataAdapter:any, io:any):any;
+    };
 }
