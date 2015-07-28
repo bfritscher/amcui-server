@@ -183,16 +183,6 @@ Preview Latex
 Print
    ->before check layout (user interaction?)
 
-Upload scans
-
-Get capture data state
-
-Upload students
-	-> auto map students
-Manual map students
-
-Display marks & question reports
-
 save formulas
 save custom csv data
 
@@ -201,6 +191,9 @@ annotate
 	-> options preview annotations on 1 copy
 	-> reset and full annotate
 export /download pdfs
+
+REFACTOR
+all file/folder names
 
 */
 /*
@@ -837,16 +830,22 @@ app.get('/project/:project/scores', aclProject, (req, res) => {
     });
 });
 
-/*
-
-linkt to page for question
-layout_box + layout_question
-
-*/
 
 /* REPORT */
 
-//auto-multiple-choice export --module ods --data /home/amc/projects/test/data --useall 1 --sort l --fich-noms /home/amc/projects/test/students.csv --output /home/amc/projects/test/exports/export.ods --option-out nom="hello world" --option-out groupsums=1 --option-out stats=1 --option-out columns=student.copy,student.key,student.name --option-out statsindic=1
+app.get('/project/:project/ods', aclProject, (req, res) => {
+    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+    var exportFile = path.resolve(PROJECTS_FOLDER, req.params.project + '/exports/export.ods');
+    amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+        'export', '--module', 'ods', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data', '--useall', '1', '--sort', 'l',
+        '--fich-noms', filename, '--output', exportFile, '--option-out', 'nom=' + req.params.project,
+        '--option-out', 'groupsums=1', '--option-out', 'stats=1', '--option-out', 'columns=student.copy,student.key,student.name', '--option-out', 'statsindic=1'
+    ], (log) => {
+        res.attachment('export.ods');
+        res.sendFile(exportFile);
+    });
+});
+
 
 /*
 ANNOTATE
