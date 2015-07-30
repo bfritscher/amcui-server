@@ -1,4 +1,4 @@
-FROM amc-server
+FROM bfritscher/amc-server
 RUN mkdir -p /amc
 COPY . /amc/
 WORKDIR /amc
