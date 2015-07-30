@@ -204,11 +204,6 @@ Print
 save formulas
 save custom csv data
 
-annotate
-	-> auto export current grade selection
-	-> options preview annotations on 1 copy
-	-> reset and full annotate
-export /download pdfs
 
 REFACTOR
 all file/folder names
@@ -383,14 +378,14 @@ function amcCommande(res, cwd, params, callback){
         errorlog += data;
     });
     amcPrepare.on('close', (code) => {
-        if (code !== 0){
+        if (code === 0){
+            callback(log);
+        } else {
             res.json({
                 log: log,
                 command: params,
                 errorlog: errorlog,
                 error: code});
-        } else {
-            callback(log);
         }
     });
 }
@@ -401,6 +396,10 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
+    var questions_definition = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_definition.tex');
+    fs.writeFileSync(questions_definition, req.body.questions_definition);
+    var questions_layout = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_layout.tex');
+    fs.writeFileSync(questions_layout, req.body.questions_layout);
     amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
         'prepare', '--with', 'pdflatex', '--filter', 'latex',
         '--out-corrige', 'out/out.pdf', '--mode', 'k',
