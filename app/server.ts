@@ -930,43 +930,11 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
 });
 /*
 
-
-before CLEAN jpg and pdf!
-
->> auto-multiple-choice annote --xmlargs /tmp/AMC-PACK-xG4VfWxw.xml
-[  15956,   0.11] Unpacked args: --debug /tmp/AMC-DEBUG-rB9THe_H.log --progression-id annote --progression 1 --projet /home/boris/MC-Projects/test/ --projets /home/boris/MC-Projects/ --ch-sign 2 --cr /home/boris/MC-Projects/test/cr --data /home/boris/MC-Projects/test/data --id-file  --taille-max 1000x1500 --qualite 100 --line-width 2 --indicatives  --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec --position marge --pointsize-nl 60 --verdict "%(name) (%(matricule)) Note: %(note final)"
-TP: %(tp), score: %S/%M --verdict-question "%s/%m" --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --no-rtl --changes-only
-
-//http://home.gna.org/auto-qcm/auto-multiple-choice.en/AMC-annote.shtml
-auto-multiple-choice annote --progression-id annote --progression 1 --projet /home/amc/projects/test
- --ch-sign 2  --taille-max 1000x1500 --qualite 100 --line-width 2
- --symbols 0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec
- --position marge --pointsize-nl 60  --verdict "%(name) (%(matricule)) Note: %(note final)\bTP: %(tp), score: %S/%M"
-  --verdict-question "%s/%m"
-  --fich-noms /home/amc/projects/test/notes.csv
-  --ecart-marge 2
-  --id-file
-  //--changes-only
-
->> auto-multiple-choice regroupe --xmlargs /tmp/AMC-PACK-4LVxmEEG.xml
-[  15959,   0.09] Unpacked args: --debug /tmp/AMC-DEBUG-rB9THe_H.log --id-file  --no-compose --projet /home/boris/MC-Projects/test/ --sujet /home/boris/MC-Projects/test/DOC-sujet.pdf --data /home/boris/MC-Projects/test/data --tex-src /home/boris/MC-Projects/test/source.tex --with pdflatex --filter latex --filtered-source /home/boris/MC-Projects/test/DOC-filtered.tex --n-copies 4 --progression-id regroupe --progression 1 --modele (name) --fich-noms /home/boris/MC-Projects/AMC/no_matricules.csv --noms-encodage UTF-8 --csv-build-name (nom|surname) (prenom|name) --single-output  --sort l --register --no-force-ascii
-[  15959,   0.09] dir = /tmp/AcxYeia14o
-
 (N)
 is replaced by the student's name.
 (ID)
 is replaced by the student number.
 (COL)
-
-auto-multiple-choice regroupe
---no-compose --projet /home/amc/projects/test/
---sujet /home/amc/projects/test/sujet.pdf
- --data /home/amc/projects/test/data
- --progression-id regroupe --progression 1
- --modele "(name)"
- --fich-noms /home/amc/projects/test/notes.csv
-  --register
-*/
 
 /*
 
