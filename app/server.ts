@@ -98,8 +98,10 @@ else if (env === 'production') {
 
 app.use(cors({
     origin: true,
-    credentials: true
+    credentials: true,
+    exposedHeaders: ['Accept-Ranges', 'Content-Encoding', 'Content-Length', 'Content-Range']
 }));
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({limit: '50mb'}));
 app.use(function(req, res, next){
