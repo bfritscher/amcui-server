@@ -357,7 +357,7 @@ app.post('/project/:project/remove', aclProject, (req, res) => {
         res.sendStatus(500);
     } else {
         acl.removeUserRoles(req.body.username, req.params.project);
-        res.sendStatus(200); 
+        res.sendStatus(200);
     }
 });
 
@@ -390,15 +390,27 @@ zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment 
 var willSendthis = zip.toBuffer();
 */
 
-
 /* EDIT */
 app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
-    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
-    fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'src/graphics/', req.body.id));
+    var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
+    fs.copySync(req.files.file.path, GRAPHICS_FOLDER + req.body.id);
     // don't forget to delete all req.files when done
     fs.unlinkSync(req.files.file.path);
-    
+    var convert = childProcess.spawn('convert', [
+        '-density', '120', req.body.id, req.body.id + '_thumb.jpg'
+        ], {
+            cwd: GRAPHICS_FOLDER
+        });
+    convert.on('close', (code) => {
+        if (code === 0) {
+            res.sendStatus(200);
+        } else {
+            res.sendStatus(500);
+        }
+    });
 });
+
+/* TODO unlink graphics or code file? */
 
 
 app.post('/project/:project/preview', aclProject, (req, res) => {
@@ -406,26 +418,19 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
+
     var questions_definition = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_definition.tex');
     fs.writeFileSync(questions_definition, req.body.questions_definition);
+
     var questions_layout = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_layout.tex');
     fs.writeFileSync(questions_layout, req.body.questions_layout);
+
     amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
         'prepare', '--with', 'pdflatex', '--filter', 'latex',
         '--out-corrige', 'out/out.pdf', '--mode', 'k',
         '--n-copies', '1', 'source.tex', '--latex-stdout'
     ], (log) => {
-        var convert = childProcess.spawn('convert', [
-            '-density', '120', 'out.pdf', 'out-%03d.png'
-        ], {
-            cwd: OUT_FOLDER
-        });
-        convert.on('close', () => {
-            var pages = fs.readdirSync(OUT_FOLDER).filter((item) => {
-                return item.indexOf('.png') > 0;
-            });
-            res.json({log: log, pages: pages});
-        });
+        res.json({log: log});
     });
 });
 
