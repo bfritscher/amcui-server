@@ -305,7 +305,7 @@ app.post('/project/create', (req, res) => {
         mkdirp.sync(root + '/exports');
         mkdirp.sync(root + '/out');
         mkdirp.sync(root + '/pdf');
-        mkdirp.sync(root + '/src');
+        mkdirp.sync(root + '/src/graphics');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
         //role, resource, permission
@@ -372,6 +372,15 @@ app.get('/project/:project/zip', aclProject, (req, res) => {
     zip.finalize();
 });
 
+app.get('/project/:project/static/:file*', aclProject, (req, res) => {
+    console.log(req.params);
+    var file = req.params.file;
+    if (req.params.hasOwnProperty(0)){
+        file += req.params[0];
+    }
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + file);
+});
+
 /*
 var zip = new AdmZip("./my_file.zip");
 zip.extractAllTo(/target path/"/home/me/zipcontent/", /overwrite/true);
@@ -383,7 +392,13 @@ var willSendthis = zip.toBuffer();
 
 
 /* EDIT */
-
+app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'src/graphics/', req.body.id));
+    // don't forget to delete all req.files when done
+    fs.unlinkSync(req.files.file.path);
+    
+});
 
 
 app.post('/project/:project/preview', aclProject, (req, res) => {
@@ -414,14 +429,8 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     });
 });
 
-app.get('/project/:project/out/:image', aclProject, (req, res) => {
-    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/out/' + req.params.image);
-});
 
 /* PRINT */
-
-
-
 app.post('/project/:project/print', aclProject, (req, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
 
@@ -451,8 +460,8 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                     'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
                      '--progression-id', 'MEP', '--progression 1'
                 ], (logLayout) => {
-                    //print
-                    // optional split answer --split
+                    // print
+                    //TODO optional split answer --split
                     amcCommande(res, PROJECT_FOLDER, [
                         'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
                         '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
@@ -489,21 +498,6 @@ app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
     zip.file(APP_FOLDER, 'assets/print.bat', {name: 'print.bat'});
     zip.finalize();
 });
-
-
-/* TODO normalise between static, out, debug */
-app.get('/project/:project/debug/:file*', aclProject, (req, res) => {
-    console.log(req.params);
-    var file = req.params.file;
-    if (req.params.hasOwnProperty(0)){
-        file += req.params[0];
-    }
-    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + file);
-});
-
-/*
-
-*/
 
 /* validation
 
@@ -749,10 +743,6 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
             });
         });
     });
-});
-
-app.get('/project/:project/static/:image', aclProject, (req, res) => {
-    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + req.params.image);
 });
 
 /* ZONES */
