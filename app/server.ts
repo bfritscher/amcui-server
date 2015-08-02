@@ -171,21 +171,36 @@ function database(req, res, callback){
     });
 }
 
-/* TEST AREA */
-app.get('/', (req, res) => {
-    res.send('Hello World3!');
-});
-
-app.get('/project/test', (req, res) => {
-    acl.allowedPermissions(req.user.username, 'test5', (err, roles) => {
-        res.send('Hello secure! #' + req.user.username + JSON.stringify(roles)  + JSON.stringify(err));
+function amcCommande(res, cwd, params, callback){
+     var amcPrepare = childProcess.spawn('auto-multiple-choice', params, {
+        cwd: cwd
     });
 
+    var log = '';
+    var errorlog = '';
+    amcPrepare.stdout.on('data', (data) => {
+        log += data;
+    });
+    amcPrepare.stderr.on('data', (data) => {
+        errorlog += data;
+    });
+    amcPrepare.on('close', (code) => {
+        if (code === 0){
+            callback(log);
+        } else {
+            res.json({
+                log: log,
+                command: params,
+                errorlog: errorlog,
+                error: code});
+        }
+    });
+}
+
+app.get('/', (req, res) => {
+    res.send('AMCUI API SERVER');
 });
 
-app.get('/project/:project/info', aclProject, (req, res) => {
-        res.send('Your project! #' + req.user.username);
-});
 
 /*
 Change options of a project
@@ -337,8 +352,13 @@ app.post('/project/:project/add', aclProject, (req, res) => {
 });
 
 app.post('/project/:project/remove', aclProject, (req, res) => {
-    acl.removeUserRoles(req.body.username, req.params.project);
-    res.sendStatus(200);
+    //cannot remove self
+    if (req.body.username === req.user.username) {
+        res.sendStatus(500);
+    } else {
+        acl.removeUserRoles(req.body.username, req.params.project);
+        res.sendStatus(200); 
+    }
 });
 
 app.get('/project/:project/zip', aclProject, (req, res) => {
@@ -364,31 +384,6 @@ var willSendthis = zip.toBuffer();
 
 /* EDIT */
 
-function amcCommande(res, cwd, params, callback){
-     var amcPrepare = childProcess.spawn('auto-multiple-choice', params, {
-        cwd: cwd
-    });
-
-    var log = '';
-    var errorlog = '';
-    amcPrepare.stdout.on('data', (data) => {
-        log += data;
-    });
-    amcPrepare.stderr.on('data', (data) => {
-        errorlog += data;
-    });
-    amcPrepare.on('close', (code) => {
-        if (code === 0){
-            callback(log);
-        } else {
-            res.json({
-                log: log,
-                command: params,
-                errorlog: errorlog,
-                error: code});
-        }
-    });
-}
 
 
 app.post('/project/:project/preview', aclProject, (req, res) => {
