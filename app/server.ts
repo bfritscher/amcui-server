@@ -184,7 +184,7 @@ function projectOptions(project: string, callback: (err, res) => void) {
     });
 }
 
-function projectThreshold(project:string, callback: (err, res) => void) {
+function projectThreshold(project: string, callback: (err, res) => void) {
     projectOptions(project, (err, result) => {
         var threshold = 0.5;
         if (result.projetAMC.seuil && !isNaN(result.projetAMC.seuil)){
@@ -610,13 +610,13 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
 
 app.get('/project/:project/mark', aclProject, (req, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
-    projectThreshold(req.params.project, (err, threshold) =>{
+    projectThreshold(req.params.project, (err, threshold) => {
         amcCommande(res, PROJECT_FOLDER, [
             'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
             ], (log) => {
                 res.json({log: log});
         });
-    })
+    });
 });
 
 app.get('/project/:project/missing', aclProject, (req, res) => {
@@ -668,7 +668,7 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
 
 
 app.get('/project/:project/capture', aclProject, (req, res) => {
-    projectThreshold(req.params.project, (err, threshold) =>{
+    projectThreshold(req.params.project, (err, threshold) => {
         database(req, res, (db) => {
             var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
             + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
