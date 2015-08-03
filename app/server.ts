@@ -173,6 +173,27 @@ function database(req, res, callback){
     });
 }
 
+function projectOptions(project: string, callback: (err, res) => void) {
+    var filename = path.resolve(PROJECTS_FOLDER, project + '/options.xml');
+    fs.readFile(filename, 'utf-8', function(err, data) {
+        if (err){
+            callback(err, null);
+        } else {
+            xml2js.parseString(data, {explicitArray: false}, callback);
+        }
+    });
+}
+
+function projectThreshold(project:string, callback: (err, res) => void) {
+    projectOptions(project, (err, result) => {
+        var threshold = 0.5;
+        if (result.projetAMC.seuil && !isNaN(result.projetAMC.seuil)){
+            threshold = parseFloat(result.projetAMC.seuil);
+        }
+        callback(null, threshold);
+    });
+}
+
 function amcCommande(res, cwd, params, callback){
      var amcPrepare = childProcess.spawn('auto-multiple-choice', params, {
         cwd: cwd
@@ -321,17 +342,10 @@ app.post('/project/create', (req, res) => {
 });
 
 app.get('/project/:project/options', aclProject, (req, res) => {
-    var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
-    fs.readFile(filename, 'utf-8', function(err, data) {
-        if (data){
-            xml2js.parseString(data, {explicitArray: false}, function (err, result) {
-                acl.roleUsers(req.params.project, (err, users) => {
-                    res.json({options: result.projetAMC, users: users});
-                });
-            });
-        } else {
-            res.sendStatus(500);
-        }
+    projectOptions(req.params.project, (err, result) => {
+        acl.roleUsers(req.params.project, (err2, users) => {
+            res.json({options: result.projetAMC, users: users});
+        });
     });
 });
 
@@ -583,7 +597,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
                 'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
                 '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
             ];
-            //--multiple //if copies
+            //TODO --multiple //if copies
             amcCommande(res, PROJECT_FOLDER, params, (logAnalyse) => {
                 res.json({
                     logImages: logImages,
@@ -596,12 +610,13 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
 
 app.get('/project/:project/mark', aclProject, (req, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
-    var threshold = 0.5;
-    amcCommande(res, PROJECT_FOLDER, [
-        'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
-        ], (log) => {
-            res.json({log: log});
-    });
+    projectThreshold(req.params.project, (err, threshold) =>{
+        amcCommande(res, PROJECT_FOLDER, [
+            'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
+            ], (log) => {
+                res.json({log: log});
+        });
+    })
 });
 
 app.get('/project/:project/missing', aclProject, (req, res) => {
@@ -653,16 +668,16 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
 
 
 app.get('/project/:project/capture', aclProject, (req, res) => {
-    database(req, res, (db) => {
-        //TODO get $threshold
-        var threshold = 0.5;
-        var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
-        + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
-        + 'FROM capture_zone WHERE student=p.student AND page=p.page AND copy=p.copy AND type=4) s '
-        + 'FROM capture_page p ORDER BY p.student, p.page, p.copy';
+    projectThreshold(req.params.project, (err, threshold) =>{
+        database(req, res, (db) => {
+            var query = "SELECT p.student || '/' || p.page || ':' || p.copy as id, p.student, p.page, p.copy, p.mse, p.timestamp_auto, p.timestamp_manual, "
+            + '(SELECT ROUND(10* COALESCE(($threshold - MIN(ABS(1.0*black/total - $threshold)))/ $threshold, 0), 1) '
+            + 'FROM capture_zone WHERE student=p.student AND page=p.page AND copy=p.copy AND type=4) s '
+            + 'FROM capture_page p ORDER BY p.student, p.page, p.copy';
 
-        db('all', query, {$threshold: threshold}, (rows) => {
-            res.json(rows || []);
+            db('all', query, {$threshold: threshold}, (rows) => {
+                res.json(rows || []);
+            });
         });
     });
 });
@@ -865,45 +880,47 @@ app.get('/project/:project/ods', aclProject, (req, res) => {
 ANNOTATE
 
 */
-//(%(matricule)) Note: %(note final)\bTP: %(tp),
+
 app.post('/project/:project/annotate', aclProject, (req, res) => {
-    tmp.file((err, tmpFile, fd, cleanup) => {
-        var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
-        var params = [
-            'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
-            '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
-            '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
-            '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',
-            '--position', 'marge', '--pointsize-nl', '60', '--verdict', '%(name) score: %S/%M',
-            '--verdict-question', '"%s/%m"',
-            '--fich-noms', filename,
-            '--no-changes-only',
-            '--ecart-marge', '2'];
-        if (req.body.ids) {
-            req.body.ids.forEach((id) => {
-                fs.writeFileSync(tmpFile, id);
-            });
-            params.push('--id-file');
-            params.push(tmpFile);
-        }
-        amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logAnnote) => {
-            params = [
-                'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
-                '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
-                '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
-                '--progression-id', 'regroupe', '--progression', '1',
-                '--modele', '(name)',
-                '--fich-noms', filename, '--register --no-rename'
-            ];
+    projectOptions( req.params.project, (err, result) => {
+        tmp.file((err, tmpFile, fd, cleanup) => {
+            var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+            var params = [
+                'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
+                '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
+                '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
+                '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',  /* TODO: from option */
+                '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
+                '--verdict-question', result.projetAMC.verdict_q,
+                '--fich-noms', filename,
+                '--no-changes-only',
+                '--ecart-marge', '2'];
             if (req.body.ids) {
+                req.body.ids.forEach((id) => {
+                    fs.writeFileSync(tmpFile, id);
+                });
                 params.push('--id-file');
                 params.push(tmpFile);
             }
-            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logRegroupe) => {
-                cleanup();
-                res.json({
-                    logAnnote: logAnnote,
-                    logRegroupe: logRegroupe
+            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logAnnote) => {
+                params = [
+                    'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
+                    '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
+                    '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
+                    '--progression-id', 'regroupe', '--progression', '1',
+                    '--modele', '(name)', /* TODO: from option */
+                    '--fich-noms', filename, '--register --no-rename'
+                ];
+                if (req.body.ids) {
+                    params.push('--id-file');
+                    params.push(tmpFile);
+                }
+                amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logRegroupe) => {
+                    cleanup();
+                    res.json({
+                        logAnnote: logAnnote,
+                        logRegroupe: logRegroupe
+                    });
                 });
             });
         });
