@@ -411,11 +411,13 @@ var willSendthis = zip.toBuffer();
 /* EDIT */
 app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
     var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
-    fs.copySync(req.files.file.path, GRAPHICS_FOLDER + req.body.id);
+    //keep extension
+    var filename = req.body.id + '.' + req.files.file.name.split('.').splice(-1)[0];
+    fs.copySync(req.files.file.path, GRAPHICS_FOLDER + filename);
     // don't forget to delete all req.files when done
     fs.unlinkSync(req.files.file.path);
     var convert = childProcess.spawn('convert', [
-        '-density', '120', req.body.id, req.body.id + '_thumb.jpg'
+        '-density', '120', filename + '[0]', req.body.id + '_thumb.jpg'
         ], {
             cwd: GRAPHICS_FOLDER
         });
@@ -438,7 +440,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     });
 
     var source = path.resolve(PROJECTS_FOLDER, req.params.project + '/source.tex');
-    fs.writeFileSync(questions_definition, req.body.source);
+    fs.writeFileSync(source, req.body.source);
 
     var questions_definition = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_definition.tex');
     fs.writeFileSync(questions_definition, req.body.questions_definition);
