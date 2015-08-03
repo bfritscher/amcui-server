@@ -331,6 +331,8 @@ app.post('/project/create', (req, res) => {
         mkdirp.sync(root + '/src/graphics');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
+        //TODO: init project data source.tex and copy images based on template
+
         //role, resource, permission
         acl.allow(project, '/project/' + project, 'admin');
         //user, role
@@ -434,6 +436,9 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
+
+    var source = path.resolve(PROJECTS_FOLDER, req.params.project + '/source.tex');
+    fs.writeFileSync(questions_definition, req.body.source);
 
     var questions_definition = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_definition.tex');
     fs.writeFileSync(questions_definition, req.body.questions_definition);
