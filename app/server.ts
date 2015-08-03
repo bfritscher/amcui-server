@@ -242,6 +242,7 @@ function amcCommande(res, cwd, project: string, msg: string, params: string[], c
         if (code === 0){
             callback(log);
         } else {
+            redisClient.hset('project:' + project + ':status', 'locked', false);
             if (res) {
                 res.json({
                     log: log,
@@ -259,6 +260,8 @@ app.get('/', (req, res) => {
 
 
 /*
+TODO
+
 Change options of a project
 	-> some trigger other functions? (marks, annotations)
 
@@ -266,8 +269,6 @@ Upload a project?
 
 Edit Latex
 	-> recompute markings?
-
-Preview Latex
 
 Print
    ->before check layout (user interaction?)
@@ -343,7 +344,15 @@ app.post('/login', (req, res, next) => {
 
 app.get('/project/list', (req, res) => {
     acl.userRoles(req.user.username, (err, roles) => {
-        res.json(roles);
+        var projects = [];
+        roles.forEach((role, idx) => {
+            redisClient.hgetall('project:' + role + ':status', (err2, status) => {
+                projects.push({project: role, status: status});
+                if (projects.length === roles.length){
+                    res.json(projects);
+                }
+            });
+        });
     });
 });
 
@@ -379,7 +388,9 @@ app.post('/project/create', (req, res) => {
 app.get('/project/:project/options', aclProject, (req, res) => {
     projectOptions(req.params.project, (err, result) => {
         acl.roleUsers(req.params.project, (err2, users) => {
-            res.json({options: result.projetAMC, users: users});
+            redisClient.hgetall('project:' + req.params.project + ':status', (err3, status) => {
+                res.json({options: result.projetAMC, users: users, status: status});
+            });
         });
     });
 });
@@ -493,66 +504,69 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     res.sendStatus(200);
 });
 
+app.get('/project/:project/reset/lock', aclProject, (req, res) => {
+    redisClient.hset('project:' + req.params.project + ':status', 'locked', 0);
+    res.end();
+});
 
 /* PRINT */
 app.post('/project/:project/print', aclProject, (req, res) => {
-    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
-    var project = req.params.project;
+    redisClient.hget('project:' + req.params.project + ':status', 'locked', (err, locked) => {
+        if (locked === '1'){
+            return res.status(409).end('ALREADY PRINTING!');
+        }
 
-    saveSourceFilesSync(req);
+        redisClient.hmset('project:' + req.params.project + ':status', 'locked', 1, 'printed', '');
+        var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+        var project = req.params.project;
 
-    fs.readdirSync(PROJECT_FOLDER + 'pdf/').forEach((item) => {
-        fs.unlinkSync(PROJECT_FOLDER + 'pdf/' + item);
-    });
+        saveSourceFilesSync(req);
 
-    res.sendStatus(200);
+        fs.readdirSync(PROJECT_FOLDER + 'pdf/').forEach((item) => {
+            fs.unlinkSync(PROJECT_FOLDER + 'pdf/' + item);
+        });
 
-    ws.to(project + '-notifications').emit('print', {action: 'start'});
+        res.sendStatus(200);
+
+        ws.to(project + '-notifications').emit('print', {action: 'start'});
 
 
-    projectOptions( req.params.project, (err, result) => {
-        //sujet.pdf, catalog.pdf, calage.xy
-        amcCommande(null, PROJECT_FOLDER, project, 'generating pdf', [
-            'prepare', '--with', 'pdflatex', '--filter', 'latex',
-            '--mode', 's[c]', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
-            '--prefix', PROJECT_FOLDER, '--latex-stdout'
-        ], (logCatalog) => {
-            //corrige.pdf for all series
-            amcCommande(null, PROJECT_FOLDER, project, 'generating answers pdf', [
+        projectOptions( req.params.project, (err, result) => {
+            //sujet.pdf, catalog.pdf, calage.xy
+            amcCommande(null, PROJECT_FOLDER, project, 'generating pdf', [
                 'prepare', '--with', 'pdflatex', '--filter', 'latex',
-                '--mode', 'k', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
+                '--mode', 's[c]', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
                 '--prefix', PROJECT_FOLDER, '--latex-stdout'
-            ], (logCorrige) => {
-                //create capture and scoring db
-                amcCommande(null, PROJECT_FOLDER, project, 'computing scoring data', [
-                    'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
-                    '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
-                ], (logScoring) => {
-                    //create layout
-                    amcCommande(null, PROJECT_FOLDER, project, 'calculating layout', [
-                        'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
-                         '--progression-id', 'MEP', '--progression', '1'
-                    ], (logLayout) => {
-                        // print
-                        //TODO optional split answer --split
-                        amcCommande(null, PROJECT_FOLDER, project, 'splitting pdf', [
-                            'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
-                            '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
-                             '--progression-id', 'impression', '--progression', '1'
-                        ], (logPrint) => {
-                             var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
-                                return item.indexOf('.pdf') > 0;
+            ], (logCatalog) => {
+                //corrige.pdf for all series
+                amcCommande(null, PROJECT_FOLDER, project, 'generating answers pdf', [
+                    'prepare', '--with', 'pdflatex', '--filter', 'latex',
+                    '--mode', 'k', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
+                    '--prefix', PROJECT_FOLDER, '--latex-stdout'
+                ], (logCorrige) => {
+                    //create capture and scoring db
+                    amcCommande(null, PROJECT_FOLDER, project, 'computing scoring data', [
+                        'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
+                        '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
+                    ], (logScoring) => {
+                        //create layout
+                        amcCommande(null, PROJECT_FOLDER, project, 'calculating layout', [
+                            'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
+                             '--progression-id', 'MEP', '--progression', '1'
+                        ], (logLayout) => {
+                            // print
+                            //TODO optional split answer --split
+                            amcCommande(null, PROJECT_FOLDER, project, 'splitting pdf', [
+                                'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
+                                '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
+                                 '--progression-id', 'impression', '--progression', '1'
+                            ], (logPrint) => {
+                                var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
+                                    return item.indexOf('.pdf') > 0;
+                                });
+                                redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'printed', new Date().getTime());
+                                ws.to(project + '-notifications').emit('print', {action: 'end', pdfs: pdfs});
                             });
-                            ws.to(project + '-notifications').emit('print', {action: 'end', pdfs: pdfs});
-                            /*{
-                                logCatalog: logCatalog,
-                                logCorrige: logCorrige,
-                                logScoring: logScoring,
-                                logLayout: logLayout,
-                                logPrint: logPrint,
-                                pdfs: pdfs
-                            });
-                            */
                         });
                     });
                 });
@@ -571,7 +585,8 @@ app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
     zip.directory(PROJECTS_FOLDER + '/' + req.params.project + '/pdf', 'sujets');
     zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/catalog.pdf', {name: 'catalog.pdf'});
     zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/corrige.pdf', {name: 'corrige.pdf'});
-    zip.file(APP_FOLDER, 'assets/print.bat', {name: 'print.bat'});
+    zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/calage.xy', {name: 'calage.xy'});
+    zip.file(APP_FOLDER + '/assets/print.bat', {name: 'print.bat.txt'});
     zip.finalize();
 });
 
