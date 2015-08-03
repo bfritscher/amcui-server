@@ -54,10 +54,32 @@ ws.use(socketioJwt.authorize({
     handshake: true
 }));
 
+//in memory rooms users list
+var rooms = {};
+
 ws.on('connection', (socket) => {
     //this socket is authenticated, we are good to handle more events from it.
     var username = (<any>socket).decoded_token.username;
-    socket.emit('msg', username);
+    socket.on('listen', (project) => {
+        acl.hasRole(username, project, (err, hasRole) => {
+            if (!hasRole) {
+                socket.disconnect(true);
+            } else {
+                socket.join(project + '-notifications');
+                socket.on('disconnect', function() {
+                    delete rooms[project][socket.id];
+                    ws.to(project + '-notifications').emit('user:disconnected', {id: socket.id, username: username});
+                });
+
+                if (!rooms.hasOwnProperty(project)){
+                    rooms[project] = {};
+                }
+                socket.emit('user:online', rooms[project]);
+                rooms[project][socket.id] = {id: socket.id, username: username};
+                ws.to(project + '-notifications').emit('user:connected', {id: socket.id, username: username});
+            }
+        });
+    });
 
     socket.on('diffsync-join', (data) => {
         acl.hasRole(username, data, (err, hasRole) => {
@@ -391,7 +413,6 @@ app.get('/project/:project/zip', aclProject, (req, res) => {
 });
 
 app.get('/project/:project/static/:file*', aclProject, (req, res) => {
-    console.log(req.params);
     var file = req.params.file;
     if (req.params.hasOwnProperty(0)){
         file += req.params[0];
