@@ -65,3 +65,8 @@ declare module "diffsync" {
         new(dataAdapter:any, io:any):any;
     };
 }
+
+declare module "stream-splitter" {
+    function StreamSplitter(splitter:string):any;
+    export = StreamSplitter;
+}

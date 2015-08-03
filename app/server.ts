@@ -3,6 +3,7 @@
 require('dotenv').load();
 require('source-map-support').install();
 import fs = require('fs-extra');
+import StreamSplitter = require("stream-splitter");
 import cors = require('cors');
 import express = require('express');
 import io = require('socket.io');
@@ -216,28 +217,38 @@ function projectThreshold(project: string, callback: (err, res) => void) {
     });
 }
 
-function amcCommande(res, cwd, params, callback){
-     var amcPrepare = childProcess.spawn('auto-multiple-choice', params, {
+function amcCommande(res, cwd, project: string, msg: string, params: string[], callback){
+    ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg, action: 'start', params: params});
+    var amc = childProcess.spawn('auto-multiple-choice', params, {
         cwd: cwd
     });
 
     var log = '';
     var errorlog = '';
-    amcPrepare.stdout.on('data', (data) => {
-        log += data;
+
+    //send complete lines
+    var splitter = amc.stdout.pipe(StreamSplitter('\n'));
+    splitter.encoding = 'utf8';
+    splitter.on('token', function(token) {
+       ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg, action: 'log', data: token});
     });
-    amcPrepare.stderr.on('data', (data) => {
+
+    amc.stderr.on('data', (data) => {
         errorlog += data;
+        ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg,  action: 'err', data: data.toString()});
     });
-    amcPrepare.on('close', (code) => {
+    amc.on('close', (code) => {
+        ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg,  action: 'end', code: code});
         if (code === 0){
             callback(log);
         } else {
-            res.json({
-                log: log,
-                command: params,
-                errorlog: errorlog,
-                error: code});
+            if (res) {
+                res.json({
+                    log: log,
+                    command: params,
+                    errorlog: errorlog,
+                    error: code});
+            }
         }
     });
 }
@@ -453,8 +464,7 @@ app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (
 
 /* TODO unlink graphics or code file? */
 
-
-app.post('/project/:project/preview', aclProject, (req, res) => {
+function saveSourceFilesSync(req){
     var OUT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/out';
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
@@ -468,64 +478,81 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
 
     var questions_layout = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_layout.tex');
     fs.writeFileSync(questions_layout, req.body.questions_layout);
+}
 
-    amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+app.post('/project/:project/preview', aclProject, (req, res) => {
+    saveSourceFilesSync(req);
+    amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'preview', [
         'prepare', '--with', 'pdflatex', '--filter', 'latex',
         '--out-corrige', 'out/out.pdf', '--mode', 'k',
         '--n-copies', '1', 'source.tex', '--latex-stdout'
     ], (log) => {
-        res.json({log: log});
+        //TODO handle checks
     });
+
+    res.sendStatus(200);
 });
 
 
 /* PRINT */
 app.post('/project/:project/print', aclProject, (req, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    var project = req.params.project;
+
+    saveSourceFilesSync(req);
 
     fs.readdirSync(PROJECT_FOLDER + 'pdf/').forEach((item) => {
         fs.unlinkSync(PROJECT_FOLDER + 'pdf/' + item);
     });
 
-    //sujet.pdf, catalog.pdf, calage.xy
-    amcCommande(res, PROJECT_FOLDER, [
-        'prepare', '--with', 'pdflatex', '--filter', 'latex',
-        '--mode', 's[c]', '--n-copies', '2', 'source.tex',
-        '--prefix', PROJECT_FOLDER, '--latex-stdout'
-    ], (logCatalog) => {
-        //corrige.pdf for all series
-        amcCommande(res, PROJECT_FOLDER, [
+    res.sendStatus(200);
+
+    ws.to(project + '-notifications').emit('print', {action: 'start'});
+
+
+    projectOptions( req.params.project, (err, result) => {
+        //sujet.pdf, catalog.pdf, calage.xy
+        amcCommande(null, PROJECT_FOLDER, project, 'generating pdf', [
             'prepare', '--with', 'pdflatex', '--filter', 'latex',
-            '--mode', 'k', '--n-copies', '2', 'source.tex',
+            '--mode', 's[c]', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
             '--prefix', PROJECT_FOLDER, '--latex-stdout'
-        ], (logCorrige) => {
-            //create capture and scoring db
-            amcCommande(res, PROJECT_FOLDER, [
-                'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
-                '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
-            ], (logScoring) => {
-                //create layout
-                amcCommande(res, PROJECT_FOLDER, [
-                    'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
-                     '--progression-id', 'MEP', '--progression 1'
-                ], (logLayout) => {
-                    // print
-                    //TODO optional split answer --split
-                    amcCommande(res, PROJECT_FOLDER, [
-                        'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
-                        '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
-                         '--progression-id', 'impression', '--progression 1'
-                    ], (logPrint) => {
-                         var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
-                            return item.indexOf('.pdf') > 0;
-                        });
-                        res.json({
-                            logCatalog: logCatalog,
-                            logCorrige: logCorrige,
-                            logScoring: logScoring,
-                            logLayout: logLayout,
-                            logPrint: logPrint,
-                            pdfs: pdfs
+        ], (logCatalog) => {
+            //corrige.pdf for all series
+            amcCommande(null, PROJECT_FOLDER, project, 'generating answers pdf', [
+                'prepare', '--with', 'pdflatex', '--filter', 'latex',
+                '--mode', 'k', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
+                '--prefix', PROJECT_FOLDER, '--latex-stdout'
+            ], (logCorrige) => {
+                //create capture and scoring db
+                amcCommande(null, PROJECT_FOLDER, project, 'computing scoring data', [
+                    'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
+                    '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
+                ], (logScoring) => {
+                    //create layout
+                    amcCommande(null, PROJECT_FOLDER, project, 'calculating layout', [
+                        'meptex', '--src', PROJECT_FOLDER + 'calage.xy', '--data', PROJECT_FOLDER + 'data',
+                         '--progression-id', 'MEP', '--progression', '1'
+                    ], (logLayout) => {
+                        // print
+                        //TODO optional split answer --split
+                        amcCommande(null, PROJECT_FOLDER, project, 'splitting pdf', [
+                            'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
+                            '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
+                             '--progression-id', 'impression', '--progression', '1'
+                        ], (logPrint) => {
+                             var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
+                                return item.indexOf('.pdf') > 0;
+                            });
+                            ws.to(project + '-notifications').emit('print', {action: 'end', pdfs: pdfs});
+                            /*{
+                                logCatalog: logCatalog,
+                                logCorrige: logCorrige,
+                                logScoring: logScoring,
+                                logLayout: logLayout,
+                                logPrint: logPrint,
+                                pdfs: pdfs
+                            });
+                            */
                         });
                     });
                 });
@@ -612,13 +639,14 @@ $delta=0.1
 
 app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    var project = req.params.project;
     fs.copySync(req.files.file.path, path.resolve(PROJECTS_FOLDER, req.params.project, 'scans/', req.files.file.name));
     // don't forget to delete all req.files when done
     fs.unlinkSync(req.files.file.path);
     tmp.file((err, path, fd, cleanup) => {
         fs.writeFileSync(path, 'scans/' + req.files.file.name);
         //need to call getimage with file to get path of extracted files...
-        amcCommande(res, PROJECT_FOLDER, [
+        amcCommande(res, PROJECT_FOLDER, project, 'extracting images', [
             'getimages', '--progression-id', 'analyse', '--vector-density', '250', '--orientation', 'portrait', '--list', path
         ], (logImages) => {
             var params = [
@@ -626,7 +654,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
                 '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
             ];
             //TODO --multiple //if copies
-            amcCommande(res, PROJECT_FOLDER, params, (logAnalyse) => {
+            amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
                 res.json({
                     logImages: logImages,
                     logAnalyse: logAnalyse
@@ -639,7 +667,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
 app.get('/project/:project/mark', aclProject, (req, res) => {
     var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
     projectThreshold(req.params.project, (err, threshold) => {
-        amcCommande(res, PROJECT_FOLDER, [
+        amcCommande(res, PROJECT_FOLDER, req.params.project, 'calculating marks', [
             'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
             ], (log) => {
                 res.json({log: log});
@@ -830,7 +858,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
         } else {
             //try auto-match
             //TODO get 'etu' from scoring_code?
-            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'matching students', [
                 'association-auto', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
                 '--notes-id', 'etu', '--liste', filename, '--liste-key', 'id'
             ], (log) => {
@@ -846,7 +874,7 @@ app.get('/project/:project/csv', aclProject, (req, res) => {
 
 //could do in db directly?
 app.post('/project/:project/association/manual', aclProject, (req, res) => {
-     amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+     amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'matching students', [
         'association', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
         '--set', '--student', req.body.student, '--copy', req.body.copy, '--id', req.body.id
     ], (log) => {
@@ -893,7 +921,7 @@ app.get('/project/:project/scores', aclProject, (req, res) => {
 app.get('/project/:project/ods', aclProject, (req, res) => {
     var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
     var exportFile = path.resolve(PROJECTS_FOLDER, req.params.project + '/exports/export.ods');
-    amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, [
+    amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'generating ods', [
         'export', '--module', 'ods', '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data', '--useall', '1', '--sort', 'l',
         '--fich-noms', filename, '--output', exportFile, '--option-out', 'nom=' + req.params.project,
         '--option-out', 'groupsums=1', '--option-out', 'stats=1', '--option-out', 'columns=student.copy,student.key,student.name', '--option-out', 'statsindic=1'
@@ -930,7 +958,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                 params.push('--id-file');
                 params.push(tmpFile);
             }
-            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logAnnote) => {
+            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'annotating pages', params, (logAnnote) => {
                 params = [
                     'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
                     '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
@@ -943,7 +971,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     params.push('--id-file');
                     params.push(tmpFile);
                 }
-                amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, params, (logRegroupe) => {
+                amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'creating annotated pdf', params, (logRegroupe) => {
                     cleanup();
                     res.json({
                         logAnnote: logAnnote,
