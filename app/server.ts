@@ -226,6 +226,7 @@ function amcCommande(res, cwd, project: string, msg: string, params: string[], c
     var splitter = amc.stdout.pipe(StreamSplitter('\n'));
     splitter.encoding = 'utf8';
     splitter.on('token', function(token) {
+       log += token + '\n';
        ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg, action: 'log', data: token});
     });
 
@@ -693,7 +694,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
         fs.writeFileSync(path, 'scans/' + req.files.file.name);
         //need to call getimage with file to get path of extracted files...
         amcCommande(res, PROJECT_FOLDER, project, 'extracting images', [
-            'getimages', '--progression-id', 'analyse', '--vector-density', '250', '--orientation', 'portrait', '--list', path
+            'getimages', '--progression-id', 'getimages', '--progression', '1', '--vector-density', '250', '--orientation', 'portrait', '--list', path
         ], (logImages) => {
             var params = [
                 'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
@@ -984,44 +985,57 @@ ANNOTATE
 */
 
 app.post('/project/:project/annotate', aclProject, (req, res) => {
-    projectOptions( req.params.project, (err, result) => {
-        tmp.file((err, tmpFile, fd, cleanup) => {
-            var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
-            var params = [
-                'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
-                '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
-                '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
-                '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',  /* TODO: from option */
-                '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
-                '--verdict-question', result.projetAMC.verdict_q,
-                '--fich-noms', filename,
-                '--no-changes-only',
-                '--ecart-marge', '2'];
-            if (req.body.ids) {
-                req.body.ids.forEach((id) => {
-                    fs.writeFileSync(tmpFile, id);
-                });
-                params.push('--id-file');
-                params.push(tmpFile);
-            }
-            amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'annotating pages', params, (logAnnote) => {
-                params = [
-                    'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
-                    '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
-                    '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
-                    '--progression-id', 'regroupe', '--progression', '1',
-                    '--modele', '(name)', /* TODO: from option */
-                    '--fich-noms', filename, '--register --no-rename'
-                ];
+    redisClient.hget('project:' + req.params.project + ':status', 'locked', (err, locked) => {
+        if (locked === '1'){
+            return res.status(409).end('ALREADY WORKING!');
+        }
+        res.sendStatus(200);
+        ws.to(req.params.project + '-notifications').emit('annotate', {action: 'start'});
+        redisClient.hmset('project:' + req.params.project + ':status', 'locked', 1, 'annotated', '');
+        projectOptions( req.params.project, (err, result) => {
+            tmp.file((err, tmpFile, fd, cleanup) => {
+                var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+                var params = [
+                    'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
+                    '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
+                    '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
+                    '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',  /* TODO: from option */
+                    '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
+                    '--verdict-question', result.projetAMC.verdict_q,
+                    '--fich-noms', filename,
+                    '--no-changes-only',
+                    '--ecart-marge', '2'];
                 if (req.body.ids) {
+                    req.body.ids.forEach((id) => {
+                        fs.writeFileSync(tmpFile, id);
+                    });
                     params.push('--id-file');
                     params.push(tmpFile);
                 }
-                amcCommande(res, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'creating annotated pdf', params, (logRegroupe) => {
-                    cleanup();
-                    res.json({
-                        logAnnote: logAnnote,
-                        logRegroupe: logRegroupe
+                amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'annotating pages', params, (logAnnote) => {
+                    params = [
+                        'regroupe', '--no-compose', '--projet', PROJECTS_FOLDER + '/' + req.params.project,
+                        '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
+                        '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
+                        '--progression-id', 'regroupe', '--progression', '1',
+                        '--modele', '(name)', /* TODO: from option */
+                        '--fich-noms', filename, '--register --no-rename'
+                    ];
+                    if (req.body.ids) {
+                        params.push('--id-file');
+                        params.push(tmpFile);
+                    }
+                    amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'creating annotated pdf', params, (logRegroupe) => {
+                        cleanup();
+                        redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'annotated', new Date().getTime());
+                        var found = logRegroupe.match(/(cr\/.*?\.pdf)/);
+                        ws.to(req.params.project + '-notifications').emit('annotate', {action: 'end', type: req.body.ids ? 'single' : 'all', file: found ? found[1] : undefined});
+                        /*
+                        res.json({
+                            logAnnote: logAnnote,
+                            logRegroupe: logRegroupe
+                        });
+                        */
                     });
                 });
             });
