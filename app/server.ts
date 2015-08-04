@@ -439,7 +439,13 @@ app.get('/project/:project/static/:file*', aclProject, (req, res) => {
     if (req.params.hasOwnProperty(0)){
         file += req.params[0];
     }
-    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + file);
+    res.sendFile(PROJECTS_FOLDER + '/' + req.params.project + '/' + file, (err) => {
+        if (err && file.split('.').splice(-1)[0] === 'jpg'){
+            res.sendFile(APP_FOLDER + '/assets/image_not_found.jpg');
+        } else if (err) {
+            res.sendStatus(404);
+        }
+    });
 });
 
 /*
