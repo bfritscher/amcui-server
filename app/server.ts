@@ -443,7 +443,7 @@ app.get('/project/:project/static/:file*', aclProject, (req, res) => {
         if (err && file.split('.').splice(-1)[0] === 'jpg'){
             res.sendFile(APP_FOLDER + '/assets/image_not_found.jpg');
         } else if (err) {
-            res.sendStatus(404);
+            res.end('NOT_FOUND');
         }
     });
 });
