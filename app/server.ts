@@ -110,10 +110,6 @@ console.log(diffSyncServer);
 var env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
     sqlite3.verbose();
-    //app.use(express.static(__dirname + '/../../avionmake/app'));
-    //app.use('/scripts', express.static(__dirname + '/../../avionmake/.tmp/scripts'));
-    //app.use('/styles', express.static(__dirname + '/../../avionmake/.tmp/styles'));
-    //app.use('/bower_components', express.static(__dirname + '/../../avionmake/bower_components'));
 }
 else if (env === 'production') {
     app.use(express.static(__dirname + '/public'));
@@ -217,7 +213,7 @@ function projectThreshold(project: string, callback: (err, res) => void) {
     });
 }
 
-function amcCommande(res, cwd, project: string, msg: string, params: string[], callback){
+function amcCommande(res, cwd, project: string, msg: string, params: string[], callback, error?){
     ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg, action: 'start', params: params});
     var amc = childProcess.spawn('auto-multiple-choice', params, {
         cwd: cwd
@@ -242,7 +238,10 @@ function amcCommande(res, cwd, project: string, msg: string, params: string[], c
         if (code === 0){
             callback(log);
         } else {
-            redisClient.hset('project:' + project + ':status', 'locked', false);
+            redisClient.hset('project:' + project + ':status', 'locked', 0);
+            if (error) {
+                error();
+            }
             if (res) {
                 res.json({
                     log: log,
@@ -481,37 +480,63 @@ app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (
 
 /* TODO unlink graphics or code file? */
 
-function saveSourceFilesSync(req){
-    var OUT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/out';
+function saveSourceFilesSync(project, body){
+    var OUT_FOLDER = PROJECTS_FOLDER + '/' + project + '/out';
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
 
-    var source = path.resolve(PROJECTS_FOLDER, req.params.project + '/source.tex');
-    fs.writeFileSync(source, req.body.source);
+    var source = path.resolve(PROJECTS_FOLDER, project + '/source.tex');
+    fs.writeFileSync(source, body.source);
 
-    var questions_definition = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_definition.tex');
-    fs.writeFileSync(questions_definition, req.body.questions_definition);
+    var questions_definition = path.resolve(PROJECTS_FOLDER, project + '/questions_definition.tex');
+    fs.writeFileSync(questions_definition, body.questions_definition);
 
-    var questions_layout = path.resolve(PROJECTS_FOLDER, req.params.project + '/questions_layout.tex');
-    fs.writeFileSync(questions_layout, req.body.questions_layout);
+    var questions_layout = path.resolve(PROJECTS_FOLDER, project + '/questions_layout.tex');
+    fs.writeFileSync(questions_layout, body.questions_layout);
 }
 
-app.post('/project/:project/preview', aclProject, (req, res) => {
-    saveSourceFilesSync(req);
-    amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'preview', [
-        'prepare', '--with', 'pdflatex', '--filter', 'latex',
-        '--out-corrige', 'out/out.pdf', '--mode', 'k',
-        '--n-copies', '1', 'source.tex', '--latex-stdout'
-    ], (log) => {
-        //TODO handle checks
-    });
 
+app.post('/project/:project/preview', aclProject, (req, res) => {
+    var keyStatus = 'project:' + req.params.project + ':status';
+    var keyQueue = 'project:' + req.params.project + ':previewqueue';
+    var project = req.params.project;
+    //replace next compile data
+    redisClient.set(keyQueue, JSON.stringify(req.body), compilePreview);
+
+    function compilePreviewEnd() {
+        redisClient.hset(keyStatus, 'preview', 0);
+        compilePreview();
+    }
+
+    function compilePreview() {
+        redisClient.hgetall(keyStatus, (err, status) => {
+            if (status.locked > 0 || status.preview > 0) {
+                //wait
+                setTimeout(compilePreview, 1000);
+            } else {
+                redisClient.get(keyQueue, (err, data) => {
+                    if (data) {
+                        redisClient.del(keyQueue);
+                        var body = JSON.parse(data);
+                        redisClient.hset(keyStatus, 'preview', 1);
+                        //compile
+                        saveSourceFilesSync(project, body);
+                        amcCommande(null, PROJECTS_FOLDER + '/' + project, project, 'preview', [
+                            'prepare', '--with', 'pdflatex', '--filter', 'latex',
+                            '--out-corrige', 'out/out.pdf', '--mode', 'k',
+                            '--n-copies', '1', 'source.tex', '--latex-stdout'
+                        ], compilePreviewEnd, compilePreviewEnd);
+                    }
+                });
+            }
+        });
+    }
     res.sendStatus(200);
 });
 
 app.get('/project/:project/reset/lock', aclProject, (req, res) => {
-    redisClient.hset('project:' + req.params.project + ':status', 'locked', 0);
+    redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'preview', 0);
     res.end();
 });
 
@@ -526,7 +551,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
         var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
         var project = req.params.project;
 
-        saveSourceFilesSync(req);
+        saveSourceFilesSync(req.params.project, req.body);
 
         fs.readdirSync(PROJECT_FOLDER + 'pdf/').forEach((item) => {
             fs.unlinkSync(PROJECT_FOLDER + 'pdf/' + item);
