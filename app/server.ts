@@ -374,8 +374,6 @@ app.post('/project/create', (req, res) => {
         mkdirp.sync(root + '/src/codes');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
-        //TODO: init project data source.tex and copy images based on template
-
         //role, resource, permission
         acl.allow(project, '/project/' + project, 'admin');
         //user, role
@@ -406,6 +404,13 @@ app.post('/project/:project/options', aclProject, (req, res) => {
         } else {
             res.sendStatus(200);
         }
+    });
+});
+
+app.post('/project/:project/copy/template', aclProject, (req, res) => {
+    var TEMPLATE_FOLDER = APP_FOLDER + '/assets/templates/' + req.body.template;
+    fs.copy(TEMPLATE_FOLDER + '/src', PROJECTS_FOLDER + '/' + req.params.project + '/src', (err) => {
+       res.sendFile(TEMPLATE_FOLDER + '/source.tex');
     });
 });
 
