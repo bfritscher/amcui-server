@@ -371,6 +371,7 @@ app.post('/project/create', (req, res) => {
         mkdirp.sync(root + '/out');
         mkdirp.sync(root + '/pdf');
         mkdirp.sync(root + '/src/graphics');
+        mkdirp.sync(root + '/src/codes');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
         //TODO: init project data source.tex and copy images based on template
@@ -495,6 +496,13 @@ function saveSourceFilesSync(project, body){
 
     var questions_layout = path.resolve(PROJECTS_FOLDER, project + '/questions_layout.tex');
     fs.writeFileSync(questions_layout, body.questions_layout);
+
+    for (var id in body.codes) {
+        if (body.codes.hasOwnProperty(id)) {
+            var file = path.resolve(PROJECTS_FOLDER, project + '/src/codes/' + id);
+            fs.writeFileSync(file, body.codes[id].content);
+        }
+    }
 }
 
 
