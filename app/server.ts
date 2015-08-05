@@ -356,9 +356,10 @@ app.get('/project/list', (req, res) => {
     });
 });
 
-app.post('/project/create', (req, res) => {
-    // create project
-    var project = req.body.project.toLowerCase();
+
+function createProject(projectName, username, success, error){
+// create project
+    var project = projectName.toLowerCase();
     var root = path.resolve(PROJECTS_FOLDER, project);
     if (!fs.existsSync(root)) {
         mkdirp.sync(root + '/cr/corrections/jpg');
@@ -377,11 +378,23 @@ app.post('/project/create', (req, res) => {
         //role, resource, permission
         acl.allow(project, '/project/' + project, 'admin');
         //user, role
-        acl.addUserRoles(req.user.username, project);
-        res.sendStatus(200);
-    }else{
-        res.status(403).send('Project already exists!');
+        acl.addUserRoles(username, project);
+        if (success) {
+            success();
+        }
+    } else {
+        if (error) {
+            error();
+        }
     }
+}
+
+app.post('/project/create', (req, res) => {
+    createProject(req.body.project, req.user.username, () => {
+        res.sendStatus(200);
+    }, () => {
+        res.status(403).send('Project already exists!');
+    });
 });
 
 app.get('/project/:project/options', aclProject, (req, res) => {
@@ -411,6 +424,30 @@ app.post('/project/:project/copy/template', aclProject, (req, res) => {
     var TEMPLATE_FOLDER = APP_FOLDER + '/assets/templates/' + req.body.template;
     fs.copy(TEMPLATE_FOLDER + '/src', PROJECTS_FOLDER + '/' + req.params.project + '/src', (err) => {
        res.sendFile(TEMPLATE_FOLDER + '/source.tex');
+    });
+});
+
+app.post('/project/:project/copy/project', aclProject, (req, res) => {
+    var src = req.params.project;
+    var dest = req.body.project.toLowerCase();
+    createProject(dest, req.user.username, () => {
+        fs.copy(PROJECTS_FOLDER + '/' + src + '/src', PROJECTS_FOLDER + '/' + dest + '/src', (err) => {
+            if (err) {
+                res.status(500).send('Failed to copy src files.');
+            } else {
+                redisClient.get('exam:' + src, (err, result) => {
+                   redisClient.set('exam:' + dest, result, (err) => {
+                        if (err) {
+                            res.status(500).send('Failed to copy data.');
+                        } else {
+                            res.sendStatus(200);
+                        }
+                   });
+                });
+            }
+        });
+    }, () => {
+        res.status(403).send('Project already exists!');
     });
 });
 
@@ -561,7 +598,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
 
     function compilePreview() {
         redisClient.hgetall(keyStatus, (err, status) => {
-            if (status.locked > 0 || status.preview > 0) {
+            if (status && (status.locked > 0 || status.preview > 0)) {
                 //wait
                 setTimeout(compilePreview, 1000);
             } else {
