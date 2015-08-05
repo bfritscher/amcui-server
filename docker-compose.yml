@@ -1,5 +1,7 @@
 redis:
   image: redis:3
+  ports:
+    - "6379:6379"
 amcuiserver:
   build: .
   command: bash -c "while true; do sleep 3; grunt serve; done"
