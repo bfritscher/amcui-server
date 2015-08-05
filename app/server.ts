@@ -458,6 +458,20 @@ zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment 
 var willSendthis = zip.toBuffer();
 */
 
+function makeThumb(project, filename, id, callback){
+    var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + project + '/src/graphics/';
+    var convert = childProcess.spawn('convert', [
+        '-density', '120', filename + '[0]', id + '_thumb.jpg'
+        ], {
+            cwd: GRAPHICS_FOLDER
+        });
+    convert.on('close', (code) => {
+        if (callback){
+            callback(code);
+        }
+    });
+}
+
 /* EDIT */
 app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (req: multiparty.Request, res) => {
     var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
@@ -466,12 +480,7 @@ app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (
     fs.copySync(req.files.file.path, GRAPHICS_FOLDER + filename);
     // don't forget to delete all req.files when done
     fs.unlinkSync(req.files.file.path);
-    var convert = childProcess.spawn('convert', [
-        '-density', '120', filename + '[0]', req.body.id + '_thumb.jpg'
-        ], {
-            cwd: GRAPHICS_FOLDER
-        });
-    convert.on('close', (code) => {
+    makeThumb(req.params.project, filename, req.body.id, (code) => {
         if (code === 0) {
             res.sendStatus(200);
         } else {
@@ -480,7 +489,34 @@ app.post('/project/:project/upload/graphics', aclProject, multipartMiddleware, (
     });
 });
 
-/* TODO unlink graphics or code file? */
+app.get('/project/:project/graphics/sync', aclProject, (req, res) => {
+    var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
+    var allFiles = fs.readdirSync(GRAPHICS_FOLDER);
+    //remove thumbs from list
+    var files = allFiles.filter((filename) => {
+        return !filename.match(/(.*)_thumb.jpg/);
+    });
+    //get files without thumb
+    files.filter((filename) => {
+        return allFiles.indexOf(filename.replace(/(.*)\..*?$/, '$1_thumb.jpg')) === -1;
+    })
+    .forEach((filename) => {
+        makeThumb(req.params.project, filename, filename.replace(/(.*)\..*?$/, '$1'), null);
+    });
+    res.json(files);
+});
+
+
+app.post('/project/:project/graphics/delete', aclProject, (req, res) => {
+    var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
+    try {
+        fs.unlinkSync(GRAPHICS_FOLDER + req.body.id + '.' + req.body.filename.split('.').splice(-1)[0]);
+        fs.unlinkSync(GRAPHICS_FOLDER + req.body.id + '_thumb.jpg');
+        res.sendStatus(200);
+    } catch (e) {
+        res.sendStatus(500);
+    }
+});
 
 function saveSourceFilesSync(project, body){
     var OUT_FOLDER = PROJECTS_FOLDER + '/' + project + '/out';
