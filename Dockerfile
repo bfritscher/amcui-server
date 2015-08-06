@@ -9,7 +9,7 @@ RUN npm install
 #ONBUILD RUN [[ -f "Gruntfile.js" ]] && grunt build || /bin/true
 #ONBUILD ENV NODE_ENV production
 
-VOLUME ["/amc/app"]
+VOLUME ["/amc/app/projects"]
 
 # Define default command.
 CMD ["grunt ", "serve"]

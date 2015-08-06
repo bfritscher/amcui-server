@@ -1,0 +1,12 @@
+redis:
+  image: redis:3
+amcuiserver:
+  build: .
+  command: bash -c "while true; do sleep 3; grunt serve; done"
+  working_dir: /amc
+  volumes:
+    - ./app:/amc/app
+  ports:
+    - "127.0.0.1:9001:9001"
+  links:
+    - redis:redis
