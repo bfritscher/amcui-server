@@ -3,13 +3,9 @@ RUN mkdir -p /amc
 COPY . /amc/
 WORKDIR /amc
 RUN npm install
-#COPY bower.json .bowerrc* /app/
-#RUN bower install --allow-root
-#ONBUILD COPY . /usr/src/app/
-#ONBUILD RUN [[ -f "Gruntfile.js" ]] && grunt build || /bin/true
-#ONBUILD ENV NODE_ENV production
+RUN grunt
 
-VOLUME ["/amc/app/projects"]
+VOLUME ["/amc/projects"]
 
 # Define default command.
-CMD ["grunt ", "serve"]
+CMD ["supervisor", "--watch", "/amc/dist", "dist/server.js"]

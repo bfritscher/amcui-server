@@ -1,5 +1,7 @@
-app/projects/
+projects/
 .tmp/
 dist/
 node_modules/
 .env
+.production.env
+data/

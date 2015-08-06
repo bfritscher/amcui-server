@@ -1,12 +1,17 @@
 redis:
   image: redis:3
+  restart: always
+  volumes:
+    - ./data:/data
 amcuiserver:
   build: .
-  command: bash -c "while true; do sleep 3; grunt serve; done"
+  env_file: .production.env
   working_dir: /amc
+  restart: always
   volumes:
-    - ./app:/amc/app
+    - ./dist/public:/amc/dist/public
+    - ./projects:/amc/projects
   ports:
-    - "127.0.0.1:9001:9001"
+    - "127.0.0.1:9002:9001"
   links:
     - redis:redis

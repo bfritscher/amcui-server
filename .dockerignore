@@ -1,6 +1,7 @@
 docker
+.env
+.production.env
 Dockerfile
 docker-compose.yml
 node_modules/*
-# app is mounted as volume for dev
-app/*
+projects/*

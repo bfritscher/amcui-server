@@ -30,7 +30,7 @@ import redisDataAdapter = require('./diffsyncredis');
 var multipartMiddleware = multiparty();
 
 var APP_FOLDER = path.resolve(__dirname, '../app/');
-var PROJECTS_FOLDER = path.resolve(__dirname, '../app/projects/');
+var PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 
 var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
 redisClient.on('error', function (err) {
