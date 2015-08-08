@@ -2,6 +2,7 @@
 
 require('dotenv').load();
 require('source-map-support').install();
+import raven = require('raven');
 import fs = require('fs-extra');
 import StreamSplitter = require("stream-splitter");
 import cors = require('cors');
@@ -27,6 +28,12 @@ import archiver = require('archiver');
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
 
+var client = new raven.Client( process.env.SENTRY_DSN || '');
+client.patchGlobal(function(sent, err) {
+  console.log(err.stack);
+  process.exit(1);
+});
+
 var multipartMiddleware = multiparty();
 
 var APP_FOLDER = path.resolve(__dirname, '../app/');
@@ -45,6 +52,7 @@ var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
 
 
 var app = express();
+app.use(raven.middleware.express.requestHandler(process.env.SENTRY_DSN));
 var server = require('http').Server(app);
 var ws = io(server);
 
@@ -347,10 +355,12 @@ app.get('/project/list', (req, res) => {
         var projects = [];
         roles.forEach((role, idx) => {
             redisClient.hgetall('project:' + role + ':status', (err2, status) => {
-                projects.push({project: role, status: status});
-                if (projects.length === roles.length){
-                    res.json(projects);
-                }
+                acl.roleUsers(role, (err, users) => {
+                    projects.push({project: role, status: status, users: users});
+                    if (projects.length === roles.length){
+                        res.json(projects);
+                    }
+                });
             });
         });
     });
@@ -401,7 +411,7 @@ app.get('/project/:project/options', aclProject, (req, res) => {
     projectOptions(req.params.project, (err, result) => {
         acl.roleUsers(req.params.project, (err2, users) => {
             redisClient.hgetall('project:' + req.params.project + ':status', (err3, status) => {
-                res.json({options: result.projetAMC, users: users, status: status});
+                res.json({options: result ? result.projetAMC : {}, users: users, status: status});
             });
         });
     });
@@ -1257,6 +1267,8 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
         next(err);
     }
 });
+
+app.use(raven.middleware.express.errorHandler(process.env.SENTRY_DSN));
 
 if (env === 'development') {
     app.use(errorHandler({ dumpExceptions: true, showStack: true }));
