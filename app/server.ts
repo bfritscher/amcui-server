@@ -822,22 +822,12 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
             ];
             //TODO --multiple //if copies
             amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
+                redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime());
                 res.json({
                     logImages: logImages,
                     logAnalyse: logAnalyse
                 });
             });
-        });
-    });
-});
-
-app.get('/project/:project/mark', aclProject, (req, res) => {
-    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
-    projectThreshold(req.params.project, (err, threshold) => {
-        amcCommande(res, PROJECT_FOLDER, req.params.project, 'calculating marks', [
-            'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
-            ], (log) => {
-                res.json({log: log});
         });
     });
 });
@@ -1064,21 +1054,54 @@ app.get('/project/:project/names', aclProject, (req, res) => {
     });
 });
 
+function calculateMarks(project, callback){
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + project + '/';
+    projectThreshold(project, (err, threshold) => {
+        amcCommande(null, PROJECT_FOLDER, project, 'calculating marks', [
+            'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
+            ], (log) => {
+                redisClient.hset('project:' + project + ':status', 'marked', new Date().getTime());
+                if (callback) {
+                    callback(log);
+                }
+        });
+    });
+}
+
+
+app.get('/project/:project/mark', aclProject, (req, res) => {
+    calculateMarks(req.params.project, (log) => {
+        res.json(log);
+    });
+});
+
 
 app.get('/project/:project/scores', aclProject, (req, res) => {
-    database(req, res, (db) => {
-        var query = 'SELECT COALESCE(aa.manual, aa.auto) AS id, ss.*, st.title, lb.page '
-            + 'FROM scoring_score ss '
-            + 'JOIN scoring_title st ON ss.question = st.question '
-            + 'JOIN scoring_question sq ON ss.question = sq.question AND '
-            + 'ss.student = sq.student AND sq.indicative = 0 '
-            + 'LEFT JOIN association_association aa ON aa.student = ss.student AND aa.copy = ss.copy '
-            + 'LEFT JOIN (SELECT student, page, question FROM layout_box GROUP BY student, page, question) lb ON lb.student = ss.student AND lb.question = ss.question '
-            + 'ORDER BY id, student, copy, title';
 
-        db('all', query, (rows) => {
-            res.json(rows);
+    function getScores(){
+        database(req, res, (db) => {
+            var query = 'SELECT COALESCE(aa.manual, aa.auto) AS id, ss.*, st.title, lb.page '
+                + 'FROM scoring_score ss '
+                + 'JOIN scoring_title st ON ss.question = st.question '
+                + 'JOIN scoring_question sq ON ss.question = sq.question AND '
+                + 'ss.student = sq.student AND sq.indicative = 0 '
+                + 'LEFT JOIN association_association aa ON aa.student = ss.student AND aa.copy = ss.copy '
+                + 'LEFT JOIN (SELECT student, page, question FROM layout_box GROUP BY student, page, question) lb ON lb.student = ss.student AND lb.question = ss.question '
+                + 'ORDER BY id, student, copy, title';
+
+            db('all', query, (rows) => {
+                res.json(rows);
+            });
         });
+    }
+
+    //check if we need to update markings
+    redisClient.hmget('project:' + req.params.project + ':status', 'scanned', 'marked', (err, results) => {
+        if (results[0] > results[1]) {
+            calculateMarks(req.params.project, getScores);
+        } else {
+            getScores();
+        }
     });
 });
 
