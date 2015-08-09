@@ -656,10 +656,11 @@ app.get('/project/:project/reset/lock', aclProject, (req, res) => {
     res.end();
 });
 
+
 /* PRINT */
 app.post('/project/:project/print', aclProject, (req, res) => {
     redisClient.hget('project:' + req.params.project + ':status', 'locked', (err, locked) => {
-        if (locked === '1'){
+        if (err || locked === '1'){
             return res.status(409).end('ALREADY PRINTING!');
         }
 
@@ -702,12 +703,16 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                              '--progression-id', 'MEP', '--progression', '1'
                         ], (logLayout) => {
                             // print
-                            //TODO optional split answer --split
-                            amcCommande(null, PROJECT_FOLDER, project, 'splitting pdf', [
+                            var params = [
                                 'imprime', '--methode', 'file', '--output', PROJECT_FOLDER + 'pdf/sheet-%e.pdf',
                                 '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
                                  '--progression-id', 'impression', '--progression', '1'
-                            ], (logPrint) => {
+                            ];
+                            console.log(result.projetAMC.split);
+                            if (result.projetAMC.split === '1') {
+                                params.push('--split');
+                            }
+                            amcCommande(null, PROJECT_FOLDER, project, 'splitting pdf', params, (logPrint) => {
                                 var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
                                     return item.indexOf('.pdf') > 0;
                                 });
@@ -1110,11 +1115,17 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
         projectOptions( req.params.project, (err, result) => {
             tmp.file((err, tmpFile, fd, cleanup) => {
                 var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+
+                var symbols = '0-0:' + result.projetAMC.symbole_0_0_type + '/' + result.projetAMC.symbole_0_0_color
+                + ',0-1:' + result.projetAMC.symbole_0_1_type + '/' + result.projetAMC.symbole_0_1_color
+                + ',1-0:' + result.projetAMC.symbole_1_0_type + '/' + result.projetAMC.symbole_1_0_color
+                + ',1-1:' + result.projetAMC.symbole_1_1_type + '/' + result.projetAMC.symbole_1_1_color;
+
                 var params = [
                     'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
                     '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
                     '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
-                    '--symbols', '0-0:none/#000000000000,0-1:mark/#ffff00000000,1-0:circle/#ffff00000000,1-1:circle/#0000ffff26ec',  /* TODO: from option */
+                    '--symbols', symbols,
                     '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
                     '--verdict-question', result.projetAMC.verdict_q,
                     '--fich-noms', filename,
@@ -1133,7 +1144,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data',
                         '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
                         '--progression-id', 'regroupe', '--progression', '1',
-                        '--modele', '(name)', /* TODO: from option */
+                        '--modele', result.projetAMC.modele_regroupement || '(ID)',
                         '--fich-noms', filename, '--register --no-rename'
                     ];
                     if (req.body.ids) {
