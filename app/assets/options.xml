@@ -11,10 +11,10 @@
   <code_examen></code_examen>
   <cr>cr</cr>
   <data>data</data>
-  <doc_catalog>DOC-catalog.pdf</doc_catalog>
-  <doc_question>DOC-sujet.pdf</doc_question>
-  <doc_setting>DOC-calage.xy</doc_setting>
-  <doc_solution>DOC-corrige.pdf</doc_solution>
+  <doc_catalog>catalog.pdf</doc_catalog>
+  <doc_question>sujet.pdf</doc_question>
+  <doc_setting>calage.xy</doc_setting>
+  <doc_solution>corrige.pdf</doc_solution>
   <email_col></email_col>
   <email_subject>Exam result</email_subject>
   <email_text>Please find enclosed your annotated completed answer sheet.
@@ -33,18 +33,18 @@ Regards.</email_text>
   <export_pagesize>a4</export_pagesize>
   <export_sort>n</export_sort>
   <filter>latex</filter>
-  <filtered_source>DOC-filtered.tex</filtered_source>
+  <filtered_source>filtered.tex</filtered_source>
   <format_export>CSV</format_export>
   <liste_key></liste_key>
   <listeetudiants></listeetudiants>
   <maj_bareme>1</maj_bareme>
-  <modele_regroupement></modele_regroupement>
+  <modele_regroupement>(N)</modele_regroupement>
   <moteur_latex_b>pdflatex</moteur_latex_b>
   <nom_examen></nom_examen>
   <nombre_copies>0</nombre_copies>
   <note_arrondi>inf</note_arrondi>
-  <note_grain>0.5</note_grain>
-  <note_max>20</note_max>
+  <note_grain>0.1</note_grain>
+  <note_max>6</note_max>
   <note_max_plafond>1</note_max_plafond>
   <note_min></note_min>
   <notes>notes.xml</notes>
@@ -56,7 +56,14 @@ Regards.</email_text>
   <seuil>0.15</seuil>
   <texsrc>source.tex</texsrc>
   <verdict>%(ID)
-NoteExamen: %(NoteExa) (total score: %S/%M)
-NoteFinal: %(NoteFinal) Projet: %(Projet) Quiz-Env.: %(quiz)</verdict>
+Mark: %s/%m (total score: %S/%M)</verdict>
   <verdict_q>&quot;%s/%m&quot;</verdict_q>
+  <symbole_0_0_color>#000000000000</symbole_0_0_color>
+  <symbole_0_0_type>none</symbole_0_0_type>
+  <symbole_0_1_color>#ff0000</symbole_0_1_color>
+  <symbole_0_1_type>mark</symbole_0_1_type>
+  <symbole_1_0_color>#ff0000</symbole_1_0_color>
+  <symbole_1_0_type>mark</symbole_1_0_type>
+  <symbole_1_1_color>#00ff00</symbole_1_1_color>
+  <symbole_1_1_type>circle</symbole_1_1_type>
 </projetAMC>

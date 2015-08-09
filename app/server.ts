@@ -1170,14 +1170,6 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
 });
 /*
 
-(N)
-is replaced by the student's name.
-(ID)
-is replaced by the student number.
-(COL)
-
-/*
-
 scoring_score
 # * why is a small string that is used to know when special cases has
 #   been encountered:
