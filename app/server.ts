@@ -25,6 +25,7 @@ import tmp = require('tmp');
 import childProcess = require('child_process');
 //import AdmZip = require('adm-zip');
 import archiver = require('archiver');
+import sizeOf = require('image-size');
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
 
@@ -166,14 +167,14 @@ function aclProject(req, res, next){
 
 function database(req, res, callback){
     var project = req.params.project;
-    var db = new sqlite3.Database('app/projects/' + project + '/data/capture.sqlite', (err) => {
+    var db = new sqlite3.Database(PROJECTS_FOLDER + '/' + project + '/data/capture.sqlite', (err) => {
         if (err){
             res.status(500).end(JSON.stringify(err));
             return;
         }
-        db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/layout.sqlite' AS layout", () => {
-            db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/association.sqlite' AS assoc", () => {
-                db.exec("ATTACH DATABASE 'app/projects/" + project + "/data/scoring.sqlite' AS scoring", () => {
+        db.exec("ATTACH DATABASE '" + PROJECTS_FOLDER + '/' + project + "/data/layout.sqlite' AS layout", () => {
+            db.exec("ATTACH DATABASE '" + PROJECTS_FOLDER + '/' + project + "/data/association.sqlite' AS assoc", () => {
+                db.exec("ATTACH DATABASE '" + PROJECTS_FOLDER + '/' + project + "/data/scoring.sqlite' AS scoring", () => {
                     var dbHandled = (method, query, params, success) => {
                         var internalCallback = (err, rows) => {
                             if (err){
@@ -245,7 +246,9 @@ function amcCommande(res, cwd, project: string, msg: string, params: string[], c
     amc.on('close', (code) => {
         ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg,  action: 'end', code: code});
         if (code === 0){
-            callback(log);
+            if (callback){
+                callback(log);
+            }
         } else {
             redisClient.hset('project:' + project + ':status', 'locked', 0);
             if (error) {
@@ -385,10 +388,17 @@ function createProject(projectName, username, success, error){
         mkdirp.sync(root + '/src/codes');
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
+        fs.copySync(path.resolve(APP_FOLDER, 'assets/students.csv'), root + '/students.csv');
         //role, resource, permission
         acl.allow(project, '/project/' + project, 'admin');
         //user, role
         acl.addUserRoles(username, project);
+        //create association db other are created on print
+        amcCommande(null, PROJECTS_FOLDER + '/' + project, project, 'create association db', [
+            'association-auto', '--data', PROJECTS_FOLDER + '/' + project + '/data',
+            '--notes-id', 'etu', '--liste', PROJECTS_FOLDER + '/' + project + '/students.csv', '--liste-key', 'id'
+        ], null);
+
         if (success) {
             success();
         }
@@ -897,9 +907,20 @@ app.get('/project/:project/capture', aclProject, (req, res) => {
 
 app.get('/project/:project/capture/:student/:page\::copy', aclProject, (req, res) => {
     database(req, res, (db) => {
-        var query = 'SELECT * FROM capture_page WHERE student=$student AND page=$page AND copy=$copy';
+        var query = 'SELECT c.src, c.student, c.page, c.copy, c.timestamp_auto, c.timestamp_manual, c.a, c.b, c.c, c.d, c.e, c.f, '
+        + 'c.mse, c.layout_image, l.dpi, l.width as originalwidth, l.width, l.height as originalheight, l.height FROM capture_page c JOIN layout_page l ON c.student = l.student AND c.page = l.page WHERE c.student=$student AND c.page=$page AND c.copy=$copy';
         db('get', query, {$student: req.params.student, $page: req.params.page, $copy: req.params.copy}, (row) => {
-            res.json(row);
+            sizeOf(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + row.layout_image, function (err, dimensions) {
+                row.ratiox = 1;
+                row.ratioy = 1;
+                if (dimensions) {
+                    row.ratiox = row.width / dimensions.width;
+                    row.ratioy = row.height / dimensions.height;
+                    row.width = dimensions.width;
+                    row.height = dimensions.height;
+                }
+                res.json(row);
+            });
         });
     });
 });
@@ -1074,7 +1095,6 @@ app.get('/project/:project/mark', aclProject, (req, res) => {
         res.json(log);
     });
 });
-
 
 app.get('/project/:project/scores', aclProject, (req, res) => {
 

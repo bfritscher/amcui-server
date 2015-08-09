@@ -1,8 +1,8 @@
-FROM bfritscher/amc-server
+FROM bfritscher/amcui-server-base
 RUN mkdir -p /amc
 COPY . /amc/
 WORKDIR /amc
-RUN npm install
+#RUN npm install
 RUN grunt
 
 VOLUME ["/amc/projects"]

@@ -70,3 +70,8 @@ declare module "stream-splitter" {
     function StreamSplitter(splitter:string):any;
     export = StreamSplitter;
 }
+
+declare module "image-size" {
+    function sizeOf(uri:string, callback:(err, any) => void):any;
+    export = sizeOf;
+}
