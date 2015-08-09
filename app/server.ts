@@ -531,6 +531,7 @@ var willSendthis = zip.toBuffer();
 function makeThumb(project, filename, id, callback){
     var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + project + '/src/graphics/';
     var convert = childProcess.spawn('convert', [
+        '-trim', '+repage', '-background', 'white', '-alpha', 'remove',
         '-density', '120', filename + '[0]', id + '_thumb.jpg'
         ], {
             cwd: GRAPHICS_FOLDER
