@@ -826,16 +826,20 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
         amcCommande(res, PROJECT_FOLDER, project, 'extracting images', [
             'getimages', '--progression-id', 'getimages', '--progression', '1', '--vector-density', '250', '--orientation', 'portrait', '--list', path
         ], (logImages) => {
-            var params = [
-                'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
-                '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
-            ];
-            //TODO --multiple //if copies
-            amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
-                redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime());
-                res.json({
-                    logImages: logImages,
-                    logAnalyse: logAnalyse
+            projectOptions( req.params.project, (err, result) => {
+                var params = [
+                    'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
+                    '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
+                ];
+                if (result.projetAMC.auto_capture_mode === '1') {
+                    params.push('--multiple');
+                }
+                amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
+                    redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime());
+                    res.json({
+                        logImages: logImages,
+                        logAnalyse: logAnalyse
+                    });
                 });
             });
         });
