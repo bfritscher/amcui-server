@@ -461,6 +461,24 @@ app.post('/project/:project/copy/project', aclProject, (req, res) => {
     });
 });
 
+app.post('/project/:project/copy/graphics', aclProject, (req, res) => {
+    var src = req.params.project;
+    var dest = req.body.project.toLowerCase();
+    acl.hasRole(req.user.username, dest, (err, hasRole) => {
+        if (hasRole) {
+            fs.copy(PROJECTS_FOLDER + '/' + src + '/src/graphics', PROJECTS_FOLDER + '/' + dest + '/src/graphics', (err) => {
+                if (err) {
+                    res.status(500).send('Failed to copy src files.');
+                } else {
+                    res.sendStatus(200);
+                }
+            });
+        } else {
+            res.sendStatus(403);
+        }
+    });
+});
+
 app.post('/project/:project/add', aclProject, (req, res) => {
     acl.addUserRoles(req.body.username, req.params.project);
     res.sendStatus(200);
