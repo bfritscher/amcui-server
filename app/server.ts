@@ -435,6 +435,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
         if (err) {
             res.sendStatus(500);
         } else {
+            ws.to(req.params.project + '-notifications').emit('update:options', req.body.options);
             res.sendStatus(200);
         }
     });
@@ -1055,6 +1056,21 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
 
 app.get('/project/:project/csv', aclProject, (req, res) => {
     res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv'));
+});
+
+app.get('/project/:project/gradefiles', aclProject, (req, res) => {
+    redisClient.get('project:' + req.params.project + ':gradefiles', (err, data) => {
+        if (data) {
+            res.send(data);
+        } else {
+            res.sendStatus(404);
+        }
+    });
+});
+
+app.post('/project/:project/gradefiles', aclProject, (req, res) => {
+    redisClient.set('project:' + req.params.project + ':gradefiles',  JSON.stringify(req.body));
+    res.sendStatus(200);
 });
 
 //could do in db directly?
