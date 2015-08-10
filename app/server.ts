@@ -1178,7 +1178,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
                     '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
                     '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
-                    '--symbols', symbols,
+                    '--symbols', symbols, '--projet', PROJECTS_FOLDER + '/' + req.params.project,
                     '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
                     '--verdict-question', result.projetAMC.verdict_q,
                     '--fich-noms', filename,
@@ -1198,7 +1198,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         '--sujet', PROJECTS_FOLDER + '/' + req.params.project + '/sujet.pdf',
                         '--progression-id', 'regroupe', '--progression', '1',
                         '--modele', result.projetAMC.modele_regroupement || '(ID)',
-                        '--fich-noms', filename, '--register --no-rename'
+                        '--fich-noms', filename, '--register', '--no-rename'
                     ];
                     if (req.body.ids) {
                         params.push('--id-file');
