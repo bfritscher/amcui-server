@@ -935,6 +935,7 @@ app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
         db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
             query = 'UPDATE capture_zone SET manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
             db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
+                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
                 res.sendStatus(200);
             });
         });
@@ -948,6 +949,7 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
         db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
             query = 'UPDATE capture_zone SET manual=$manual WHERE student=$student AND page=$page AND copy=$copy AND type=$type AND id_a=$id_a AND id_b=$id_b';
             db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy, $manual: req.body.manual, $type: req.body.type, $id_a: req.body.id_a, $id_b: req.body.id_b}, () => {
+                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
                 res.sendStatus(200);
             });
         });
@@ -993,6 +995,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                 {$student: req.body.student, $copy: req.body.copy}, () => {
                                     db('run', 'DELETE FROM association_association WHERE student=$student AND copy=$copy',
                                     {$student: req.body.student, $copy: req.body.copy}, () => {
+                                        redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
                                         res.sendStatus(200);
                                     });
                                 });
