@@ -1056,7 +1056,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
 app.get('/project/:project/csv', aclProject, (req, res) => {
     res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv'), (err) => {
         fs.copySync(path.resolve(APP_FOLDER, 'assets/students.csv'), PROJECTS_FOLDER + '/' + req.params.project + '/students.csv');
-        res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
+        res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv'));
     });
 });
 
