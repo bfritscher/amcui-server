@@ -6,6 +6,7 @@
   <allocate_ids>0</allocate_ids>
   <annote_position>marges</annote_position>
   <annote_rtl></annote_rtl>
+  <annote_ecart_marge>4</annote_ecart_marge>
   <assoc_code></assoc_code>
   <auto_capture_mode>-1</auto_capture_mode>
   <code_examen></code_examen>

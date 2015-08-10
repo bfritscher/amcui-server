@@ -1182,8 +1182,8 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     '--position', result.projetAMC.annote_position, '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
                     '--verdict-question', result.projetAMC.verdict_q,
                     '--fich-noms', filename,
-                    '--no-changes-only', '--ecart',
-                    '--ecart-marge', '2'];
+                    '--no-changes-only',
+                    '--ecart-marge', result.projetAMC.annote_ecart_marge || '2'];
                 if (req.body.ids) {
                     req.body.ids.forEach((id) => {
                         fs.writeFileSync(tmpFile, id);
