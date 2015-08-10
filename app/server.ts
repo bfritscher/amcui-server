@@ -1179,10 +1179,10 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
                     '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
                     '--symbols', symbols, '--projet', PROJECTS_FOLDER + '/' + req.params.project,
-                    '--position', 'marge', '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
+                    '--position', result.projetAMC.annote_position, '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
                     '--verdict-question', result.projetAMC.verdict_q,
                     '--fich-noms', filename,
-                    '--no-changes-only',
+                    '--no-changes-only', '--ecart',
                     '--ecart-marge', '2'];
                 if (req.body.ids) {
                     req.body.ids.forEach((id) => {
