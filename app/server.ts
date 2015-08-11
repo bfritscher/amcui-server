@@ -145,8 +145,7 @@ app.use(function(req, res, next){
   }
 });
 
-//secure /project with auth api
-app.use('/project', expressJwt({
+var secure = expressJwt({
     secret: process.env.JWT_SECRET,
     getToken: function fromHeaderOrQuerystring (req) {
         if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
@@ -156,7 +155,11 @@ app.use('/project', expressJwt({
         }
         return null;
     }
-}));
+});
+//secure /project with auth api
+app.use('/project', secure);
+app.use('/admin', secure);
+
 
 function aclProject(req, res, next){
     return <express.RequestHandler>acl.middleware(2, (req: express.Request, res) => {
@@ -270,6 +273,31 @@ app.get('/', (req, res) => {
 });
 
 
+acl.allow('admin', '/admin', 'admin');
+acl.addUserRoles('boris', 'admin');
+app.get('/admin/stats', <express.RequestHandler>acl.middleware(1, (req: express.Request, res) => {
+        return req.user.username;
+    }, 'admin') , (req, res) => {
+
+    var stats = {roles: [], users: {}};
+    redisClient.smembers('acl_meta@roles', (err, roles) => {
+        stats.roles = roles;
+        redisClient.smembers('acl_meta@users', (err, users) => {
+            var i = 0;
+            users.forEach((user) => {
+                stats.users[user] = [];
+                acl.userRoles(user, (err, uroles) => {
+                    stats.users[user] = uroles;
+                    i++;
+                    if (i === users.length){
+                        res.json(stats);
+                    }
+                });
+            });
+        });
+    });
+});
+
 /*
 TODO
 
@@ -373,6 +401,9 @@ app.get('/project/list', (req, res) => {
 function createProject(projectName, username, success, error){
 // create project
     var project = projectName.toLowerCase();
+    if (project === 'admin') {
+        return error();
+    }
     var root = path.resolve(PROJECTS_FOLDER, project);
     if (!fs.existsSync(root)) {
         mkdirp.sync(root + '/cr/corrections/jpg');
