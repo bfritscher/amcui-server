@@ -736,7 +736,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                 ], (logCorrige) => {
                     //create capture and scoring db
                     amcCommande(null, PROJECT_FOLDER, project, 'computing scoring data', [
-                        'prepare', '--mode', 'b', 'source.tex', '--prefix', PROJECT_FOLDER,
+                        'prepare', '--mode', 'b', '--n-copies', result.projetAMC.nombre_copies, 'source.tex', '--prefix', PROJECT_FOLDER,
                         '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
                     ], (logScoring) => {
                         //create layout
