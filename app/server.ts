@@ -698,7 +698,6 @@ app.get('/project/:project/reset/lock', aclProject, (req, res) => {
     res.end();
 });
 
-
 /* PRINT */
 app.post('/project/:project/print', aclProject, (req, res) => {
     redisClient.hget('project:' + req.params.project + ':status', 'locked', (err, locked) => {
@@ -1065,6 +1064,20 @@ app.get('/project/:project/zones/:student/:page\::copy', aclProject, (req, res) 
 });
 
 /* GRADES */
+
+app.get('/project/:project/scoring', aclProject, (req, res) => {
+    var PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
+    var project = req.params.project;
+
+    projectOptions( req.params.project, (err, result) => {
+        amcCommande(null, PROJECT_FOLDER, project, 'computing scoring data', [
+            'prepare', '--mode', 'b', '--n-copies', result.projetAMC.nombre_copies, 'source.tex', '--prefix', PROJECT_FOLDER,
+            '--data', PROJECT_FOLDER + 'data', '--latex-stdout'
+        ], (logScoring) => {
+            res.json(logScoring);
+        });
+    });
+});
 
 app.post('/project/:project/csv', aclProject, (req, res) => {
     var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
