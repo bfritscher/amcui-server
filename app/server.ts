@@ -1235,7 +1235,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     'annote', '--progression-id', 'annote', '--progression', '1', '--cr',  PROJECTS_FOLDER + '/' + req.params.project + '/cr',
                     '--data', PROJECTS_FOLDER + '/' + req.params.project + '/data/',
                     '--ch-sign', '2', '--taille-max', '1000x1500', '--qualite', '100', '--line-width', '2',
-                    '--symbols', symbols, '--projet', PROJECTS_FOLDER + '/' + req.params.project,
+                    '--symbols', symbols,
                     '--position', result.projetAMC.annote_position, '--pointsize-nl', '60', '--verdict', result.projetAMC.verdict,
                     '--verdict-question', result.projetAMC.verdict_q,
                     '--fich-noms', filename,
