@@ -962,7 +962,7 @@ app.get('/project/:project/capture/:student/:page\::copy', aclProject, (req, res
 
 app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
     database(req, res, (db) => {
-        var query = 'UPDATE capture_page SET timestamp_annotate=0, timestamp_manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
+        var query = 'UPDATE capture_page SET timestamp_annotate=0, timestamp_manual=0 WHERE student=$student AND page=$page AND copy=$copy';
         db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
             query = 'UPDATE capture_zone SET manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
             db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
