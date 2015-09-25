@@ -47,7 +47,7 @@ Regards.</email_text>
   <note_grain>0.1</note_grain>
   <note_max>6</note_max>
   <note_max_plafond>1</note_max_plafond>
-  <note_min></note_min>
+  <note_min>1</note_min>
   <notes>notes.xml</notes>
   <postcorrect_copy>0</postcorrect_copy>
   <postcorrect_student>0</postcorrect_student>
