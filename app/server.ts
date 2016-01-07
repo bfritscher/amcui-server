@@ -292,7 +292,7 @@ acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
 app.get('/admin/stats', <express.RequestHandler>acl.middleware(1, (req: express.Request, res) => {
         return req.user.username;
-    }, 'admin') , (req, res) => {
+    }, 'admin'), (req, res) => {
 
     var stats = {roles: [], users: {}};
     redisClient.smembers('acl_meta@roles', (err, roles) => {

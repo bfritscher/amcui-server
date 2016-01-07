@@ -53,7 +53,7 @@ declare module "acl" {
     areAnyRolesAllowed: (roles: strings, resource: strings, permissions: strings, cb?: AllowedCallback) => Promise<any>;
     whatResources: (roles: strings, permissions: strings, cb?: AnyCallback) => Promise<any>;
     permittedResources: (roles: strings, permissions: strings, cb?: Function) => Promise<void>;
-    middleware: (numPathComponents: number, userId: Value|GetUserId, actions: strings) => Promise<any>;
+    middleware: (numPathComponents: number, userId: Value|GetUserId, actions: strings) => Function;
   }
 
   interface Option {
