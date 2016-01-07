@@ -29,9 +29,9 @@ import sizeOf = require('image-size');
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
 
-var client = new raven.Client( process.env.SENTRY_DSN || '');
-client.patchGlobal(function(sent, err) {
-  console.log(err.stack);
+var ravenClient = new raven.Client( process.env.SENTRY_DSN || '');
+ravenClient.patchGlobal(function(sent, err) {
+  console.log('patchGlobal', err.stack);
   process.exit(1);
 });
 
@@ -114,7 +114,7 @@ ws.on('connection', (socket) => {
 
 var dataAdapter = new redisDataAdapter(redisClient, 'exam');
 var diffSyncServer = new diffSync.Server(dataAdapter, ws);
-console.log(diffSyncServer);
+console.log('diffSyncServer started', diffSyncServer.adapter.namespace); //ts lint
 
 var env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
@@ -272,6 +272,18 @@ app.get('/', (req, res) => {
     res.send('AMCUI API SERVER');
 });
 
+app.get('/testerror', (req, res) => {
+    throw 'Error Test';
+});
+
+app.get('/testraven', (req, res) => {
+    try {
+        throw 'Error Test Raven';
+    } catch (e) {
+        ravenClient.captureException(e);
+        res.send('error catched and sent');
+    }
+});
 
 acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
