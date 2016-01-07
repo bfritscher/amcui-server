@@ -23,6 +23,8 @@ import Acl = require('acl');
 import multiparty = require('connect-multiparty');
 import tmp = require('tmp');
 import childProcess = require('child_process');
+//import git = require('simple-git');
+import u2f = require('u2f');
 //import AdmZip = require('adm-zip');
 import archiver = require('archiver');
 import sizeOf = require('image-size');
@@ -159,6 +161,7 @@ var secure = expressJwt({
 //secure /project with auth api
 app.use('/project', secure);
 app.use('/admin', secure);
+app.use('/profile', secure);
 
 
 function aclProject(req, res, next){
@@ -355,11 +358,14 @@ version > 1.2.1 feature seuil-up not supported
 
 /* Project API */
 app.post('/login', (req, res, next) => {
-    if (req.body.password && req.body.username) {
+    if (req.body.username) {
         var username = req.body.username.toLowerCase();
         var sendToken = (user) => {
             try {
                 delete user.password;
+                delete user.keyHandle;
+                delete user.publicKey;
+                delete user.u2fRequest;
                 var token = jwt.sign(user, process.env.JWT_SECRET, {expiresInMinutes: 60 * 6});
                 res.json({token: token});
             } catch (e) {
@@ -368,10 +374,70 @@ app.post('/login', (req, res, next) => {
             }
         };
         redisClient.get('user:' + username, function(err, reply) {
+            var u2fAnswer;
+
             if (reply) {
                 var user = JSON.parse(reply);
-                if (bcrypt.compareSync(req.body.password, user.password)) {
-                    sendToken(user);
+
+                if (req.body.u2f){
+                    if (user.u2f){
+                        u2fAnswer = u2f.checkSignature(user.u2fRequest, req.body.u2f, user.publicKey);
+                        if (u2fAnswer.successful) {
+                            sendToken(user);
+                        } else {
+                            res.sendStatus(500);
+                        }
+                    } else {
+                        u2fAnswer = u2f.checkRegistration(user.u2fRequest, req.body.u2f);
+                        if (u2fAnswer.successful) {
+                            user.u2f = true;
+                            user.keyHandle = u2fAnswer.keyHandle;
+                            user.publicKey = u2fAnswer.publicKey;
+                            redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+                                if (err) {
+                                    res.sendStatus(500);
+                                } else {
+                                    res.json({
+                                        u2f: user.u2fRequest
+                                    });
+                                }
+                            });
+                        } else {
+                            res.sendStatus(500);
+                        }
+                    }
+
+                } else if (bcrypt.compareSync(req.body.password, user.password)) {
+                    if (!user.u2f && req.body.u2fRegistration) {
+                        //handle u2f key registration
+                        user.u2fRequest = u2f.request(process.env.SITE_URL);
+                        //store u2fRequest in user
+                        redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+                            if (err) {
+                                res.sendStatus(500);
+                            } else {
+                                res.json({
+                                    u2f: user.u2fRequest
+                                });
+                            }
+                        });
+                    } else if (user.u2f) {
+                        //handle u2f key validation
+                        user.u2fRequest = u2f.request(process.env.SITE_URL, user.keyHandle);
+                        //store u2fRequest in user
+                        redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+                            if (err) {
+                                res.sendStatus(500);
+                            } else {
+                                res.json({
+                                    u2f: user.u2fRequest
+                                });
+                            }
+                        });
+
+                    } else{
+                        sendToken(user);
+                    }
                 } else {
                     res.status(401).send('Wrong user or password');
                 }
@@ -390,6 +456,54 @@ app.post('/login', (req, res, next) => {
         });
     } else {
         res.sendStatus(400);
+    }
+});
+
+app.post('/profile/removeU2f', (req, res, next) => {
+    redisClient.get('user:' + req.user.username, function(err, reply) {
+        if (reply) {
+            var user = JSON.parse(reply);
+            delete user.keyHandle;
+            delete user.publicKey;
+            delete user.u2fRequest;
+            delete user.u2f;
+            redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+                if (err) {
+                    res.sendStatus(500);
+                } else {
+                    res.sendStatus(200);
+                }
+            });
+        } else {
+            res.sendStatus(401);
+        }
+    });
+});
+
+app.post('/changePassword', (req, res, next) => {
+    if (req.body.password && req.body.username && req.body.newPassword) {
+        var username = req.body.username.toLowerCase();
+        redisClient.get('user:' + username, function(err, reply) {
+            if (reply) {
+                var user = JSON.parse(reply);
+                if (bcrypt.compareSync(req.body.password, user.password)) {
+                    user.password = req.body.newPassword;
+                    redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+                        if (err) {
+                            res.sendStatus(500);
+                        } else {
+                            res.sendStatus(200);
+                        }
+                    });
+                } else {
+                    res.status(401).send('Wrong user or password');
+                }
+            } else {
+                res.status(401).send('Wrong user or password');
+            }
+        });
+    } else {
+        res.status(401).send('Wrong user or password');
     }
 });
 
