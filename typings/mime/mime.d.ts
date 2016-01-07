@@ -16,5 +16,4 @@ declare module "mime" {
 	}
 
 	export var charsets: Charsets;
-	export var default_type: string;
 }

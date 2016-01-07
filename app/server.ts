@@ -366,7 +366,7 @@ app.post('/login', (req, res, next) => {
                 delete user.keyHandle;
                 delete user.publicKey;
                 delete user.u2fRequest;
-                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresInMinutes: 60 * 6});
+                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresIn: 60 * 60 * 6});
                 res.json({token: token});
             } catch (e) {
                 console.log(e);
@@ -496,14 +496,14 @@ app.post('/changePassword', (req, res, next) => {
                         }
                     });
                 } else {
-                    res.status(401).send('Wrong user or password');
+                    res.status(404).send('Wrong user or password');
                 }
             } else {
-                res.status(401).send('Wrong user or password');
+                res.status(404).send('Wrong user or password');
             }
         });
     } else {
-        res.status(401).send('Wrong user or password');
+        res.status(404).send('Wrong user or password');
     }
 });
 

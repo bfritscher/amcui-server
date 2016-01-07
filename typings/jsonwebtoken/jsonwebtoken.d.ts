@@ -3,7 +3,7 @@
 // Definitions by: Maxime LUCE <https://github.com/SomaticIT>
 // Definitions: https://github.com/borisyankov/DefinitelyTyped
 
-/// <reference path="../node/node.d.ts" /> 
+/// <reference path="../node/node.d.ts" />
 
 declare module "jsonwebtoken" {
 
@@ -23,7 +23,7 @@ declare module "jsonwebtoken" {
          */
         algorithm?: string;
         /** @member {number} - Lifetime for the token in minutes */
-        expiresInMinutes?: number;
+        expiresIn?: number;
         audience?: string;
         subject?: string;
         issuer?: string;
