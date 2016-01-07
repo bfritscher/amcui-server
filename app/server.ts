@@ -1531,7 +1531,7 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
 app.use(raven.middleware.express.errorHandler(process.env.SENTRY_DSN));
 
 if (env === 'development') {
-    app.use(errorHandler({ dumpExceptions: true, showStack: true }));
+    app.use(errorHandler({log: true}));
 }
 
 server.listen(process.env.SERVER_PORT, '0.0.0.0');
