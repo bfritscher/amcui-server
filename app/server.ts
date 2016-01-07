@@ -366,7 +366,7 @@ app.post('/login', (req, res, next) => {
                 delete user.keyHandle;
                 delete user.publicKey;
                 delete user.u2fRequest;
-                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresIn: 60 * 60 * 6});
+                var token = jwt.sign(user, process.env.JWT_SECRET, {expiresIn: '6h'});
                 res.json({token: token});
             } catch (e) {
                 console.log(e);
