@@ -649,6 +649,9 @@ function saveSourceFilesSync(project, body){
         fs.unlinkSync(OUT_FOLDER + '/' + item);
     });
 
+    var json = path.resolve(PROJECTS_FOLDER, project + '/data.json');
+    fs.writeFileSync(json, body.json);
+
     var source = path.resolve(PROJECTS_FOLDER, project + '/source.tex');
     fs.writeFileSync(source, body.source);
 
