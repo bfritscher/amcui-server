@@ -487,7 +487,7 @@ app.post('/changePassword', (req, res, next) => {
             if (reply) {
                 var user = JSON.parse(reply);
                 if (bcrypt.compareSync(req.body.password, user.password)) {
-                    user.password = req.body.newPassword;
+                    user.password = bcrypt.hashSync(req.body.newPassword, 10);
                     redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
                         if (err) {
                             res.sendStatus(500);
