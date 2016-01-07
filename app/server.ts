@@ -397,9 +397,7 @@ app.post('/login', (req, res, next) => {
                                 if (err) {
                                     res.sendStatus(500);
                                 } else {
-                                    res.json({
-                                        u2f: user.u2fRequest
-                                    });
+                                    sendToken(user);
                                 }
                             });
                         } else {
