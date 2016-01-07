@@ -761,7 +761,6 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                 '--sujet',  'sujet.pdf',  '--data',  PROJECT_FOLDER + 'data',
                                  '--progression-id', 'impression', '--progression', '1'
                             ];
-                            console.log(result.projetAMC.split);
                             if (result.projetAMC.split === '1') {
                                 params.push('--split');
                             }
