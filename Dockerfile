@@ -4,6 +4,8 @@ COPY . /amc/
 WORKDIR /amc
 #RUN npm install
 RUN grunt
+RUN git config --global user.email "root@amcui.ig.he-arc.ch"
+RUN git config --global user.name "GradeManager (AMCUI)"
 
 VOLUME ["/amc/projects"]
 

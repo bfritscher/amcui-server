@@ -23,7 +23,7 @@ import Acl = require('acl');
 import multiparty = require('connect-multiparty');
 import tmp = require('tmp');
 import childProcess = require('child_process');
-//import git = require('simple-git');
+import git = require('simple-git');
 import u2f = require('u2f');
 //import AdmZip = require('adm-zip');
 import archiver = require('archiver');
@@ -660,6 +660,47 @@ app.post('/project/:project/remove', aclProject, (req, res) => {
     }
 });
 
+
+app.get('/project/:project/gitlogs', aclProject, (req, res) => {
+    var g = git(PROJECTS_FOLDER + '/' + req.params.project);
+    //use cI when git version supports it
+    g._run(['log', '--walk-reflogs', '--pretty=format:%H%+gs%+an%+ci'], (err, data) => {
+        if (err) {
+            console.log('log', err);
+            res.status(500).send(err);
+        }
+        var logs = [];
+        var json = data.split('\n');
+        var i = 0;
+        while ( i < json.length ) {
+            var msg = json[i + 1];
+            var idx = msg.indexOf(':');
+            var log = {
+                sha: json[i],
+                type: msg.substring(0, idx),
+                msg: msg.substring(idx + 2),
+                username: json[i + 2],
+                date: new Date(json[i + 3])
+            };
+            logs.push(log);
+            i += 4;
+        }
+        res.json(logs);
+    });
+});
+
+app.post('/project/:project/revert', aclProject, (req, res) => {
+    var g = git(PROJECTS_FOLDER + '/' + req.params.project);
+    g._run(['reset', '--hard', req.body.sha], (err, data) => {
+        if (err) {
+            console.log('reset', err);
+            res.status(500).send(err);
+        }
+        var json = path.resolve(PROJECTS_FOLDER, req.params.project + '/data.json');
+        res.send(fs.readFileSync(json));
+    });
+});
+
 app.get('/project/:project/zip', aclProject, (req, res) => {
     var zip = archiver('zip');
     res.on('close', function() {
@@ -781,6 +822,21 @@ function saveSourceFilesSync(project, body){
     }
 }
 
+function commitGit(project, username, message){
+    console.log('commitGit', project, username, message);
+    var g = git(PROJECTS_FOLDER + '/' + project);
+    g.init()
+    ._run(['add', '--all', '.'], (err) => {
+        if (err) {
+            console.log('add', err);
+        }
+    })
+    ._run(['commit', '--author=' + username + ' <' + username + '@amcui.ig.he-arc.ch>', '-m', message], (err, data) => {
+        if (err) {
+            console.log('commit', err);
+        }
+    });
+}
 
 app.post('/project/:project/preview', aclProject, (req, res) => {
     var keyStatus = 'project:' + req.params.project + ':status';
@@ -792,6 +848,11 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     function compilePreviewEnd() {
         redisClient.hset(keyStatus, 'preview', 0);
         compilePreview();
+    }
+
+    function compilePreviewSuccess(){
+        commitGit(project, req.user.username, 'preview');
+        compilePreviewEnd();
     }
 
     function compilePreview() {
@@ -811,7 +872,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
                             'prepare', '--with', 'pdflatex', '--filter', 'latex',
                             '--out-corrige', 'out/out.pdf', '--mode', 'k',
                             '--n-copies', '1', 'source.tex', '--latex-stdout'
-                        ], compilePreviewEnd, compilePreviewEnd);
+                        ], compilePreviewSuccess, compilePreviewEnd);
                     }
                 });
             }
@@ -821,7 +882,9 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
 });
 
 app.get('/project/:project/reset/lock', aclProject, (req, res) => {
-    redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'preview', 0);
+    redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'preview', 0, (err) => {
+        console.log(err);
+    });
     res.end();
 });
 
@@ -883,6 +946,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                 var pdfs = fs.readdirSync(PROJECT_FOLDER + 'pdf/').filter((item) => {
                                     return item.indexOf('.pdf') > 0;
                                 });
+                                commitGit(project, req.user.username, 'print');
                                 redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'printed', new Date().getTime());
                                 ws.to(project + '-notifications').emit('print', {action: 'end', pdfs: pdfs});
                             });
@@ -1389,6 +1453,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     }
                     amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'creating annotated pdf', params, (logRegroupe) => {
                         cleanup();
+                        commitGit(req.params.project, req.user.username, 'annotate');
                         redisClient.hmset('project:' + req.params.project + ':status', 'locked', 0, 'annotated', new Date().getTime());
                         var found = logRegroupe.match(/(cr\/.*?\.pdf)/);
                         ws.to(req.params.project + '-notifications').emit('annotate', {action: 'end', type: req.body.ids ? 'single' : 'all', file: found ? found[1] : undefined});

@@ -8,7 +8,7 @@ module.exports = function (grunt) {
                 script: 'dist/server.js'
             },
             options: {
-                ignore: ['node_modules/**', 'Gruntfile.js'],
+                ignore: ['projects/**', 'node_modules/**', 'Gruntfile.js'],
                 nodeArgs: ['--debug'],
                 env: {
                     PORT: '8181'
