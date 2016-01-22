@@ -1135,17 +1135,21 @@ app.get('/project/:project/capture/:student/:page\::copy', aclProject, (req, res
         var query = 'SELECT c.src, c.student, c.page, c.copy, c.timestamp_auto, c.timestamp_manual, c.a, c.b, c.c, c.d, c.e, c.f, '
         + 'c.mse, c.layout_image, l.dpi, l.width as originalwidth, l.width, l.height as originalheight, l.height FROM capture_page c JOIN layout_page l ON c.student = l.student AND c.page = l.page WHERE c.student=$student AND c.page=$page AND c.copy=$copy';
         db('get', query, {$student: req.params.student, $page: req.params.page, $copy: req.params.copy}, (row) => {
-            sizeOf(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + row.layout_image, function (err, dimensions) {
-                row.ratiox = 1;
-                row.ratioy = 1;
-                if (dimensions) {
-                    row.ratiox = row.width / dimensions.width;
-                    row.ratioy = row.height / dimensions.height;
-                    row.width = dimensions.width;
-                    row.height = dimensions.height;
-                }
-                res.json(row);
-            });
+            if (row) {
+                sizeOf(PROJECTS_FOLDER + '/' + req.params.project + '/cr/' + row.layout_image, function (err, dimensions) {
+                    row.ratiox = 1;
+                    row.ratioy = 1;
+                    if (dimensions) {
+                        row.ratiox = row.width / dimensions.width;
+                        row.ratioy = row.height / dimensions.height;
+                        row.width = dimensions.width;
+                        row.height = dimensions.height;
+                    }
+                    res.json(row);
+                });
+            } else {
+                res.sendStatus(404);
+            }
         });
     });
 });
