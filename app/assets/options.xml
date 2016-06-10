@@ -39,7 +39,7 @@ Regards.</email_text>
   <liste_key></liste_key>
   <listeetudiants></listeetudiants>
   <maj_bareme>1</maj_bareme>
-  <modele_regroupement>(N)</modele_regroupement>
+  <modele_regroupement>(id)_(ID)</modele_regroupement>
   <moteur_latex_b>pdflatex</moteur_latex_b>
   <nom_examen></nom_examen>
   <nombre_copies>0</nombre_copies>
@@ -56,8 +56,9 @@ Regards.</email_text>
   <regroupement_type>STUDENTS</regroupement_type>
   <seuil>0.15</seuil>
   <texsrc>source.tex</texsrc>
-  <verdict>%(ID)
-Mark: %s/%m (total score: %S/%M)</verdict>
+  <verdict>.
+        %(ID)
+        Mark: %s/%m (total score: %S/%M)</verdict>
   <verdict_q>&quot;%s/%m&quot;</verdict_q>
   <symbole_0_0_color>#000000000000</symbole_0_0_color>
   <symbole_0_0_type>none</symbole_0_0_type>
