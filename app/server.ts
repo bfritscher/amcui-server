@@ -1504,6 +1504,7 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
     res.attachment(req.params.project + '_annotate.zip');
     zip.pipe(res);
     zip.directory(PROJECTS_FOLDER + '/' + req.params.project + '/cr/corrections/pdf', 'annotate');
+    zip.file(APP_FOLDER + '/assets/extractFirstPage.bat', {name: 'extractFirstPage.bat.txt'});
     zip.finalize();
 });
 /*
