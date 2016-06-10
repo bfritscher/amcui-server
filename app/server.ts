@@ -53,7 +53,6 @@ var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
 }}
 */);
 
-
 var app = express();
 app.use(raven.middleware.express.requestHandler(process.env.SENTRY_DSN));
 var server = require('http').Server(app);
@@ -1091,7 +1090,7 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
                 rows = [];
             }
             var results = rows.reduce((result, page) => {
-                var id = page.student + page.copy;
+                var id = page.student + '_' + page.copy;
                 if (seenTotal.indexOf(id) < 0){
                   result.complete += 1;
                   seenTotal.push(id);
