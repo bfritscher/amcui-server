@@ -628,12 +628,31 @@ app.post('/project/:project/copy/project', aclProject, (req, res) => {
     });
 });
 
+//TODO: handle only graphics or codes needed?
 app.post('/project/:project/copy/graphics', aclProject, (req, res) => {
     var src = req.params.project;
     var dest = req.body.project.toLowerCase();
     acl.hasRole(req.user.username, dest, (err, hasRole) => {
-        if (hasRole) {
+        if (hasRole && src !== dest) {
             fs.copy(PROJECTS_FOLDER + '/' + src + '/src/graphics', PROJECTS_FOLDER + '/' + dest + '/src/graphics', (err) => {
+                if (err) {
+                    res.status(500).send('Failed to copy src files.');
+                } else {
+                    res.sendStatus(200);
+                }
+            });
+        } else {
+            res.sendStatus(403);
+        }
+    });
+});
+//TODO: refactor?
+app.post('/project/:project/copy/codes', aclProject, (req, res) => {
+    var src = req.params.project;
+    var dest = req.body.project.toLowerCase();
+    acl.hasRole(req.user.username, dest, (err, hasRole) => {
+        if (hasRole && src !== dest) {
+            fs.copy(PROJECTS_FOLDER + '/' + src + '/src/codes', PROJECTS_FOLDER + '/' + dest + '/src/codes', (err) => {
                 if (err) {
                     res.status(500).send('Failed to copy src files.');
                 } else {
