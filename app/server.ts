@@ -661,7 +661,6 @@ app.post('/project/:project/remove', aclProject, (req, res) => {
     }
 });
 
-
 app.get('/project/:project/gitlogs', aclProject, (req, res) => {
     var g = git(PROJECTS_FOLDER + '/' + req.params.project);
     //use cI when git version supports it
@@ -713,6 +712,7 @@ app.get('/project/:project/zip', aclProject, (req, res) => {
     zip.finalize();
 });
 
+
 app.get('/project/:project/static/:file*', aclProject, (req, res) => {
     var file = req.params.file;
     if (req.params.hasOwnProperty(0)){
@@ -744,7 +744,7 @@ function makeThumb(project, filename, id, callback){
         ], {
             cwd: GRAPHICS_FOLDER
         });
-    convert.on('close', (code) => {
+    convert.on('exit', (code) => {
         if (callback){
             callback(code);
         }
@@ -824,7 +824,6 @@ function saveSourceFilesSync(project, body){
 }
 
 function commitGit(project, username, message){
-    console.log('commitGit', project, username, message);
     var g = git(PROJECTS_FOLDER + '/' + project);
     g.init()
     ._run(['add', '--all', '.'], (err) => {
