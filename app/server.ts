@@ -1442,6 +1442,9 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                     });
                     params.push('--id-file');
                     params.push(tmpFile);
+                } else {
+                    // annotate all but clear folder first
+                    fs.emptyDir(PROJECTS_FOLDER + '/' + req.params.project + '/cr/corrections/pdf');
                 }
                 amcCommande(null, PROJECTS_FOLDER + '/' + req.params.project, req.params.project, 'annotating pages', params, (logAnnote) => {
                     params = [
