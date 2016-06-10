@@ -544,6 +544,7 @@ function createProject(projectName, username, success, error){
         //copy default option file
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
         fs.copySync(path.resolve(APP_FOLDER, 'assets/students.csv'), root + '/students.csv');
+        fs.copySync(path.resolve(APP_FOLDER, 'assets/gitignore.template'), root + '/.gitignore');
         //role, resource, permission
         acl.allow(project, '/project/' + project, 'admin');
         //user, role

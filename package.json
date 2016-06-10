@@ -9,7 +9,8 @@
     "grunt-newer": "^1.1.1",
     "grunt-nodemon": "^0.4.0",
     "grunt-ts": "^4.2.0",
-    "grunt-tslint": "^2.3.1-beta"
+    "grunt-tslint": "^2.3.1-beta",
+    "tslint": "^3.11.0"
   },
   "main": "server.js",
   "scripts": {

@@ -1,0 +1,5 @@
+amc-compiled.*
+out/out.pdf
+pdf/*
+cr/*
+scans/*
