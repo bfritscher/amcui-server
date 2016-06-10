@@ -592,6 +592,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
             res.sendStatus(500);
         } else {
             ws.to(req.params.project + '-notifications').emit('update:options', req.body.options);
+            commitGit(req.params.project, req.user.username, 'options');
             res.sendStatus(200);
         }
     });
