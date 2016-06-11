@@ -163,11 +163,14 @@ app.use('/admin', secure);
 app.use('/profile', secure);
 
 
-function aclProject(req, res, next){
-    return <express.RequestHandler>acl.middleware(2, (req: express.Request, res) => {
+let aclProject: express.RequestHandler = <express.RequestHandler>acl.middleware(2, (req: express.Request, res) => {
         return req.user.username;
-    }, 'admin')(req, res, next);
-}
+    }, 'admin');
+
+let aclAdmin: express.RequestHandler = <express.RequestHandler>acl.middleware(1, (req: express.Request, res) => {
+        return req.user.username;
+    }, 'admin');
+
 
 
 function database(req, res, callback){
@@ -289,9 +292,8 @@ app.get('/testraven', (req, res) => {
 
 acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
-app.get('/admin/stats', <express.RequestHandler>acl.middleware(1, (req: express.Request, res) => {
-        return req.user.username;
-    }, 'admin'), (req, res) => {
+
+app.get('/admin/stats', aclAdmin, (req, res) => {
 
     var stats = {roles: [], users: {}};
     redisClient.smembers('acl_meta@roles', (err, roles) => {
@@ -310,6 +312,49 @@ app.get('/admin/stats', <express.RequestHandler>acl.middleware(1, (req: express.
             });
         });
     });
+});
+
+app.get('/admin/du', aclAdmin, (req, res) => {
+        let size = childProcess.spawn('du', ['-k', '-d 2'], {cwd: PROJECTS_FOLDER});
+        size.stdout.setEncoding('utf8');
+        let projects = {};
+        let re = /(\d+)\t\.\/([^\/]*)\/?(.*)/;
+        size.stdout.on('data', function (data) {
+            let entry = re.exec(data.trim());
+            if (entry === null) {
+                return;
+            }
+            if (!projects.hasOwnProperty(entry[2])) {
+                projects[entry[2]] = {total: 0, folders: []};
+            }
+            if (entry[3] === '') {
+                projects[entry[2]].total = Number(entry[1]);
+            } else {
+                let folder = {};
+                folder[entry[3]] = Number(entry[1]);
+                projects[entry[2]].folders.push(folder);
+            }
+        });
+        size.stderr.on('data', function (data) {
+            console.log('stderr: ' + data);
+        });
+
+        size.on('exit', function (code) {
+            Object.keys(projects).forEach((k) => {
+                let p = projects[k];
+                let sum = p.folders.reduce((total, f) => {
+                    return total + f[Object.keys(f)[0]];
+                }, 0);
+                p.folders.push({'.': p.total - sum});
+            });
+            res.json(projects);
+        });
+});
+
+app.post('/admin/import', aclAdmin, (req, res) => {
+    // Warning, does not check if project folder is valid
+    addProjectAcl(req.body.project, req.user.username);
+    res.sendStatus(200);
 });
 
 /*
@@ -521,6 +566,13 @@ app.get('/project/list', (req, res) => {
 });
 
 
+function addProjectAcl(project, username) {
+    //role, resource, permission
+    acl.allow(project, '/project/' + project, 'admin');
+    //user, role
+    acl.addUserRoles(username, project);
+}
+
 function createProject(projectName, username, success, error){
 // create project
     var project = projectName.toLowerCase();
@@ -544,10 +596,8 @@ function createProject(projectName, username, success, error){
         fs.copySync(path.resolve(APP_FOLDER, 'assets/options.xml'), root + '/options.xml');
         fs.copySync(path.resolve(APP_FOLDER, 'assets/students.csv'), root + '/students.csv');
         fs.copySync(path.resolve(APP_FOLDER, 'assets/gitignore.template'), root + '/.gitignore');
-        //role, resource, permission
-        acl.allow(project, '/project/' + project, 'admin');
-        //user, role
-        acl.addUserRoles(username, project);
+
+        addProjectAcl(project, username);
         //create association db other are created on print
         amcCommande(null, PROJECTS_FOLDER + '/' + project, project, 'create association db', [
             'association-auto', '--data', PROJECTS_FOLDER + '/' + project + '/data',
