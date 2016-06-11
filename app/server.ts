@@ -294,10 +294,8 @@ acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
 
 app.get('/admin/stats', aclAdmin, (req, res) => {
-
-    var stats = {roles: [], users: {}};
+    var stats = {users: {}, projects: {}};
     redisClient.smembers('acl_meta@roles', (err, roles) => {
-        stats.roles = roles;
         redisClient.smembers('acl_meta@users', (err, users) => {
             var i = 0;
             users.forEach((user) => {
@@ -306,13 +304,57 @@ app.get('/admin/stats', aclAdmin, (req, res) => {
                     stats.users[user] = uroles;
                     i++;
                     if (i === users.length){
-                        res.json(stats);
+                        let s = 0;
+                        let g = 0;
+                        roles.forEach((project) => {
+                            let p = {
+                                students: undefined,
+                                commits: undefined,
+                            };
+                            stats.projects[project] = p;
+                            countStudentsCSV(project, (r) => {
+                                p.students = r;
+                                s++;
+                                if (s === roles.length && g === roles.length) {
+                                    res.json(stats);
+                                }
+                            });
+                            countGitCommits(project, (r) => {
+                                p.commits = r;
+                                g++;
+                                if (s === roles.length && g === roles.length) {
+                                    res.json(stats);
+                                }
+                            });
+                        });
                     }
                 });
             });
         });
     });
 });
+
+function countStudentsCSV(project, callback) {
+    let filename = path.resolve(PROJECTS_FOLDER, project + '/students.csv');
+    fs.readFile(filename, (err, data) => {
+        if (err) {
+            callback(-1);
+        } else {
+            callback(data.toString('utf8').split('\n').length - 1);
+        }
+    });
+}
+
+function countGitCommits(project, callback){
+    var g = git(PROJECTS_FOLDER + '/' + project);
+    g._run(['rev-list', '--count', 'master'], (err, data) => {
+        if (err) {
+            callback(-1);
+        } else {
+            callback(Number(data.trim()));
+        }
+    });
+}
 
 app.get('/admin/du', aclAdmin, (req, res) => {
         let size = childProcess.spawn('du', ['-k', '-d 2'], {cwd: PROJECTS_FOLDER});
@@ -364,6 +406,12 @@ app.post('/admin/addtoproject', aclAdmin, (req, res) => {
 });
 
 app.post('/admin/removefromproject', aclAdmin, (req, res) => {
+    acl.removeUserRoles(req.user.username, req.body.project);
+    console.log(`ADMIN: ${req.user.username} removed himself from ${req.body.project}`);
+    res.sendStatus(200);
+});
+
+app.post('/admin/removeuser', aclAdmin, (req, res) => {
     acl.removeUserRoles(req.user.username, req.body.project);
     console.log(`ADMIN: ${req.user.username} removed himself from ${req.body.project}`);
     res.sendStatus(200);
