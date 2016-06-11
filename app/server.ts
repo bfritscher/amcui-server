@@ -357,8 +357,21 @@ app.post('/admin/import', aclAdmin, (req, res) => {
     res.sendStatus(200);
 });
 
+app.post('/admin/addtoproject', aclAdmin, (req, res) => {
+    acl.addUserRoles(req.user.username, req.body.project);
+    console.log(`ADMIN: ${req.user.username} added himself to ${req.body.project}`);
+    res.sendStatus(200);
+});
+
+app.post('/admin/removefromproject', aclAdmin, (req, res) => {
+    acl.removeUserRoles(req.user.username, req.body.project);
+    console.log(`ADMIN: ${req.user.username} removed himself from ${req.body.project}`);
+    res.sendStatus(200);
+});
+
 /*
 TODO
+
 
 Change options of a project
 	-> some trigger other functions? (marks, annotations)
