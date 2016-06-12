@@ -469,7 +469,7 @@ app.post('/login', (req, res, next) => {
                 var token = jwt.sign(user, process.env.JWT_SECRET, {expiresIn: '6h'});
                 res.json({token: token});
             } catch (e) {
-                console.log(e);
+                console.log('login', e, user);
                 res.status(500).send(e);
             }
         };
@@ -1719,8 +1719,10 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
     }
     // Something is wrong, inform user
     if (err.errorCode && err.msg) {
+        console.log('custom_error_handler:', err.errorCode, err.msg);
         res.status(err.errorCode).json( err.msg );
     } else {
+        console.log('custom_error_handler_skip:', err)
         next(err);
     }
 });
