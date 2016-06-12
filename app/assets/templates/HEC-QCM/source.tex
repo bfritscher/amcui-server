@@ -1,14 +1,14 @@
 \documentclass[a4paper]{article}
 
-\usepackage[utf8x]{inputenc}    
+\usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[francais,lang=FR,bloc,completemulti,ensemble,automarks]{automultiplechoice}    
+\usepackage[francais,lang=FR,bloc,completemulti,ensemble,automarks]{automultiplechoice}
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{multirow}
 \usepackage{multicol}
 \usepackage{enumitem}
-\usepackage{courier} 
+\usepackage{courier}
 \usepackage{listings}
 \usepackage{color}
 
@@ -65,14 +65,14 @@
 %%% Scoring strategy:
 \scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
 
-\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }   
+\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
 
 %%% liste des questions:
 \input{questions_definition.tex}
 
 \exemplaire{1}{
 
-%%% debut de l'en-tête des copies :    
+%%% debut de l'en-tête des copies :
 \setlength{\parindent}{0pt}
 \noindent{UNIVERSITE DE LAUSANNE\\\bf Faculté des Hautes Etudes Commerciales}
 
@@ -82,10 +82,10 @@
     \begin{tabularx}{\textwidth}{|l|X|l|}
     \hline
     Professeurs        & Matière                        & Session    \\ \hline
-    \bf \ACMUIteacher & \bf \ACMUImatiere &  \bf \ACMUIsession \\ \hline
+    \bf \AMCUIteacher & \bf \AMCUIcourse &  \bf \AMCUIsession \\ \hline
     \end{tabularx}
 \end{table}
-%\multicolumn{1}{|c|}{\bf 
+%\multicolumn{1}{|c|}{\bf
 
 {
 \em\setlength{\parindent}{0pt}
@@ -105,17 +105,17 @@ A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distr
   Les deux documents doivent porter votre nom, prénom et  numéro d'étudiant.
 \newline
 
-\hfill\fbox{    
+\hfill\fbox{
     \begin{minipage}{.9\linewidth}
       Nom et prénom:
-      
-      \vspace*{.5cm}\dotfill
-
-      No matricule:      
 
       \vspace*{.5cm}\dotfill
 
-      No de place:      
+      No matricule:
+
+      \vspace*{.5cm}\dotfill
+
+      No de place:
 
       \vspace*{.5cm}\dotfill
 
@@ -130,9 +130,9 @@ A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distr
 \input{questions_layout.tex}
 
 
-\AMCcleardoublepage    
+\AMCcleardoublepage
 
-\AMCdebutFormulaire    
+\AMCdebutFormulaire
 
 %%% début de l'en-tête de la feuille de réponses
 {\large\bf\noindent Feuille de réponses}
@@ -150,17 +150,17 @@ et inscrivez votre nom, prénom et numéro de place ci-dessous.
 
 \vspace{3ex}
 
-\hfill\champnom{\fbox{    
+\hfill\champnom{\fbox{
     \begin{minipage}{.9\linewidth}
       Nom:
-      
-      \vspace*{.5cm}\dotfill
-
-      Prénom:      
 
       \vspace*{.5cm}\dotfill
 
-      Place:      
+      Prénom:
+
+      \vspace*{.5cm}\dotfill
+
+      Place:
 
       \vspace*{.5cm}\dotfill
 
@@ -179,7 +179,7 @@ et inscrivez votre nom, prénom et numéro de place ci-dessous.
 
 \vspace{1ex}
 Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
-par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de 
+par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de
 couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
 Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un correcteur liquide (Tipp-Ex).
 }
@@ -190,11 +190,11 @@ Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un
 
 \begin{multicols}{2}
 \setlength{\parindent}{0pt}
-\formulaire    
+\formulaire
 \end{multicols}
 
-\clearpage    
+\clearpage
 
-}  
+}
 
 \end{document}

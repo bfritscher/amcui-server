@@ -1,6 +1,6 @@
 \documentclass[a4paper]{article}
 
-\usepackage[utf8x]{inputenc}    
+\usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[francais,lang=FR]{automultiplechoice}
 %%% completemulti, ensemble
@@ -10,7 +10,7 @@
 \usepackage{multirow}
 \usepackage{multicol}
 \usepackage{enumitem}
-\usepackage{courier} 
+\usepackage{courier}
 \usepackage{listings}
 \usepackage{color}
 
@@ -76,14 +76,14 @@
 
 
 
-\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }   
+\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
 
 %%% liste des questions:
 \input{questions_definition.tex}
 
 \exemplaire{1}{
 
-%%% debut de l'en-tête des copies :    
+%%% debut de l'en-tête des copies :
 \setlength{\parindent}{0pt}
 
 \noindent{\textbf{
@@ -92,21 +92,21 @@
 
 \vspace{2ex}
 
-\noindent{\textbf{1PT/1TPart} \hfill \bf Session \ACMUIsession}
+\noindent{\textbf{\AMCUIclasses} \hfill \bf Session \AMCUIsession}
 
-\ACMUImatiere  \hfill \ACMUIteacher
+\AMCUIcourse  \hfill \AMCUIteacher
 
 \vspace*{1cm}
 
 {\renewcommand{\arraystretch}{4}
 \begin{tabularx}{15cm}{p{6cm}p{0.5cm}p{7cm}}
 \hline
-\underline{Unité d'enseignement} & : & \textbf{\ACMUImatiere}    \\ \hline
-\underline{Professeur-e/s} & : & \textbf{\ACMUIteacher}  \\ \hline
+\underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\ \hline
+\underline{Professeur-e/s} & : & \textbf{\AMCUIteacher}  \\ \hline
 \underline{Moyens auxiliaires autorises} & : & \textbf{Toute documentation papier} \\ \hline
-\underline{Date} & : & \textbf{11.06.2015} \\ \hline
-\underline{Temps à disposition} & : & \textbf{90'} \\ \hline
-\underline{Cotation utilisée pour la correction} & : & \textbf{Indiquée dans la donnée} \\ \hline
+\underline{Date} & : & \textbf{\AMCUIdate} \\ \hline
+\underline{Temps à disposition} & : & \textbf{\AMCUIduration} \\ \hline
+\underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\ \hline
 \underline{Consignes} & : & Écrire au stylo noir ou bleu. Bon travail \\ \hline
 \underline{Nom et prénom de l'étudiant-e} & : & \\ \hline
 \end{tabularx}
@@ -117,53 +117,50 @@
 \newpage
 
 %%% \vspace{3cm}
-%%% 
+%%%
 %%% \begin{center}
 %%% \textit{Cette page a été laissée intentionnellement blanche}
 %%% \end{center}
 
 
 %%%  \newpage
-%\multicolumn{1}{|c|}{\bf 
+%\multicolumn{1}{|c|}{\bf
 
 %%% {
 %%% \em\setlength{\parindent}{0pt}
-%%% 
+%%%
 %%% Les questions faisant apparaître le symbole \multiSymbole{} peuvent
 %%% présenter une ou plusieurs bonnes réponses. Les autres ont
 %%%   une unique bonne réponse.
 %%% \newline
-%%% 
+%%%
 %%% A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distribuée avec l'énoncé.
 %%%  Les deux documents doivent porter votre nom et prénom.
 %%% \newline
-%%% 
-%%% 
+%%%
+%%%
 %%% }\hspace*{\fill}
 \vspace{1ex}
 
 %%% fin de l'en-tête
 
+%% \AMCcode{etu}{2}
+%% \hspace*{\fill}
 
-
-
-\AMCcode{etu}{2}
-\hspace*{\fill}
 \begin{minipage}[b]{6.5cm}
-\setlength{\parindent}{0pt}
-$\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
-et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
-
-\vspace{3ex}
+%% \setlength{\parindent}{0pt}
+%% $\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
+%% et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
+%% \vspace{3ex}
 
 \champnom{
-  \fbox{    
+  \fbox{
     \begin{minipage}{.9\linewidth}
       Nom:
-      
+
       \vspace*{.5cm}\dotfill
 
-      Prénom:         
+      Prénom:
 
       \vspace*{.5cm}\dotfill
 
@@ -179,7 +176,7 @@ et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
 
 
 %%% Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
-%%% par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, 
+%%% par rapport à une case vide. Ne coloriez pas les cases au crayon à papier,
 
 N'utilisez pas de couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
 
@@ -192,7 +189,7 @@ Pour les questions ouvertes NE PAS COCHER les cases de points!
 \input{questions_layout.tex}
 
 
-%%% \AMCdebutFormulaire    
+%%% \AMCdebutFormulaire
 
 %%% début de l'en-tête de la feuille de réponses
 }

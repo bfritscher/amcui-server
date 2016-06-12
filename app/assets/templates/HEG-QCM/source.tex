@@ -1,14 +1,14 @@
 \documentclass[a4paper]{article}
 
-\usepackage[utf8x]{inputenc}    
+\usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[francais,lang=FR,bloc,completemulti,ensemble,automarks]{automultiplechoice}    
+\usepackage[francais,lang=FR,bloc,completemulti,ensemble,automarks]{automultiplechoice}
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{multirow}
 \usepackage{multicol}
 \usepackage{enumitem}
-\usepackage{courier} 
+\usepackage{courier}
 \usepackage{listings}
 \usepackage{color}
 \usepackage{pdfpages}
@@ -65,34 +65,35 @@
 
 %%% Scoring strategy:
 \scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
+%\scoringDefaultS{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
 
-\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }   
+\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
 
 %%% liste des questions:
 \input{questions_definition.tex}
 
 \exemplaire{1}{
 
-%%% debut de l'en-tête des copies :    
+%%% debut de l'en-tête des copies :
 \setlength{\parindent}{0pt}
 
 \noindent{\textbf{Examen de fin de semestre} \hfill \includegraphics[]{src/graphics/logo_heg.png}}
 
 \vspace{2ex}
 
-\noindent{\textbf{2PTA/2PTB/2PTD/3EEA/3EED} \hfill \bf Session \ACMUIsession}
+\noindent{\textbf{\AMCUIclasses} \hfill \bf Session \AMCUIsession}
 
 \vspace*{1cm}
 
 {\renewcommand{\arraystretch}{4}
 \begin{tabularx}{15cm}{p{6cm}p{0.5cm}p{7cm}}
 \hline
-\underline{Unité d'enseignement} & : & \textbf{\ACMUImatiere}    \\ \hline
-\underline{Professeur-e/s} & : & \textbf{\ACMUIteacher}  \\ \hline
+\underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\ \hline
+\underline{Professeur-e/s} & : & \textbf{\AMCUIteacher}  \\ \hline
 \underline{Moyens auxiliaires autorises} & : & \textbf{Toute documentation autorisée} \\ \hline
-\underline{Date} & : & \textbf{11.06.2015} \\ \hline
-\underline{Temps à disposition} & : & \textbf{90'} \\ \hline
-\underline{Cotation utilisée pour la correction} & : & \textbf{20pts par exercice} \\ \hline
+\underline{Date} & : & \textbf{\AMCUIdate} \\ \hline
+\underline{Temps à disposition} & : & \textbf{\AMCUIduration} \\ \hline
+\underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\ \hline
 \underline{Consignes} & : & Ne répondez que sur la feuille de réponses! Aucune autre réponse ne sera prise en compte. Bon travail \\ \hline
 \underline{Nom et prénom de l'étudiant-e} & : & \\ \hline
 \end{tabularx}
@@ -111,7 +112,7 @@
 
 
 \newpage
-%\multicolumn{1}{|c|}{\bf 
+%\multicolumn{1}{|c|}{\bf
 
 {
 \em\setlength{\parindent}{0pt}
@@ -135,29 +136,29 @@ A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distr
 
 %\includepdf[pages=-]{src/Feuilles_de_brouillon_2015.pdf}
 
-\AMCcleardoublepage    
+\AMCcleardoublepage
 
-\AMCdebutFormulaire    
+\AMCdebutFormulaire
 
 %%% début de l'en-tête de la feuille de réponses
 {\large\bf\noindent Feuille de réponses}
 
 {\setlength{\parindent}{0pt}\hspace*{\fill}
 
-\AMCcode{etu}{3}\hspace*{\fill}
+%% \AMCcode{etu}{3}\hspace*{\fill}
 \begin{minipage}[b]{6.5cm}\setlength{\parindent}{0pt}
-$\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
-et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
+%% $\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
+%% et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
 
 \vspace{1ex}
 
-\hfill\champnom{\fbox{    
+\hfill\champnom{\fbox{
     \begin{minipage}{.9\linewidth}
       Nom:
-      
+
       \vspace*{.5cm}\dotfill
 
-      Prénom:         
+      Prénom:
 
       \vspace*{.5cm}\dotfill
 
@@ -176,7 +177,7 @@ et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
 
 \vspace{1ex}
 Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
-par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de 
+par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de
 couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
 Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un correcteur liquide (Tipp-Ex).
 }
@@ -187,7 +188,7 @@ Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un
 
 \begin{multicols}{2}
 \setlength{\parindent}{0pt}
-\formulaire    
+\formulaire
 \end{multicols}
 
 
@@ -208,8 +209,8 @@ Bonnes vacances!
 
 
 
-\clearpage    
+\clearpage
 
-}  
+}
 
 \end{document}
