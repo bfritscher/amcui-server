@@ -399,7 +399,7 @@ app.post('/admin/import', aclAdmin, (req, res) => {
 
 app.post('/admin/addtoproject', aclAdmin, (req, res) => {
     acl.addUserRoles(req.user.username, req.body.project);
-    let msg = `ADMIN: ${req.user.username} added himself to ${req.body.project}`
+    let msg = `ADMIN: ${req.user.username} added himself to ${req.body.project}`;
     console.log(msg);
     ravenClient.captureMessage(msg);
     res.sendStatus(200);
@@ -407,7 +407,7 @@ app.post('/admin/addtoproject', aclAdmin, (req, res) => {
 
 app.post('/admin/removefromproject', aclAdmin, (req, res) => {
     acl.removeUserRoles(req.user.username, req.body.project);
-    let msg = `ADMIN: ${req.user.username} removed himself from ${req.body.project}`
+    let msg = `ADMIN: ${req.user.username} removed himself from ${req.body.project}`;
     console.log(msg);
     ravenClient.captureMessage(msg);
     res.sendStatus(200);
@@ -415,7 +415,6 @@ app.post('/admin/removefromproject', aclAdmin, (req, res) => {
 
 /*
 TODO
-
 
 Change options of a project
 	-> some trigger other functions? (marks, annotations)
