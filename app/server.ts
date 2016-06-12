@@ -45,6 +45,7 @@ var PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
 redisClient.on('error', function (err) {
     console.log('Redis error ' + err);
+    ravenClient.captureException(err);
 });
 var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
 /*
@@ -377,9 +378,6 @@ app.get('/admin/du', aclAdmin, (req, res) => {
                 projects[entry[2]].folders.push(folder);
             }
         });
-        size.stderr.on('data', function (data) {
-            console.log('stderr: ' + data);
-        });
 
         size.on('exit', function (code) {
             Object.keys(projects).forEach((k) => {
@@ -401,19 +399,17 @@ app.post('/admin/import', aclAdmin, (req, res) => {
 
 app.post('/admin/addtoproject', aclAdmin, (req, res) => {
     acl.addUserRoles(req.user.username, req.body.project);
-    console.log(`ADMIN: ${req.user.username} added himself to ${req.body.project}`);
+    let msg = `ADMIN: ${req.user.username} added himself to ${req.body.project}`
+    console.log(msg);
+    ravenClient.captureMessage(msg);
     res.sendStatus(200);
 });
 
 app.post('/admin/removefromproject', aclAdmin, (req, res) => {
     acl.removeUserRoles(req.user.username, req.body.project);
-    console.log(`ADMIN: ${req.user.username} removed himself from ${req.body.project}`);
-    res.sendStatus(200);
-});
-
-app.post('/admin/removeuser', aclAdmin, (req, res) => {
-    acl.removeUserRoles(req.user.username, req.body.project);
-    console.log(`ADMIN: ${req.user.username} removed himself from ${req.body.project}`);
+    let msg = `ADMIN: ${req.user.username} removed himself from ${req.body.project}`
+    console.log(msg);
+    ravenClient.captureMessage(msg);
     res.sendStatus(200);
 });
 
@@ -796,7 +792,6 @@ app.get('/project/:project/gitlogs', aclProject, (req, res) => {
     //use cI when git version supports it
     g._run(['log', '--walk-reflogs', '--pretty=format:%H%+gs%+an%+ci'], (err, data) => {
         if (err) {
-            console.log('log', err);
             res.status(500).send(err);
         }
         var logs = [];
@@ -823,7 +818,7 @@ app.post('/project/:project/revert', aclProject, (req, res) => {
     var g = git(PROJECTS_FOLDER + '/' + req.params.project);
     g._run(['reset', '--hard', req.body.sha], (err, data) => {
         if (err) {
-            console.log('reset', err);
+            ravenClient.captureException(err);
             res.status(500).send(err);
         }
         var json = path.resolve(PROJECTS_FOLDER, req.params.project + '/data.json');
@@ -959,11 +954,13 @@ function commitGit(project, username, message){
     ._run(['add', '--all', '.'], (err) => {
         if (err) {
             console.log('add', err);
+            ravenClient.captureException(err);
         }
     })
     ._run(['commit', '--author=' + username + ' <' + username + '@amcui.ig.he-arc.ch>', '-m', message], (err, data) => {
         if (err) {
             console.log('commit', err);
+            ravenClient.captureException(err);
         }
     });
 }
