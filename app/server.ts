@@ -69,6 +69,11 @@ ws.use(socketioJwt.authorize({
 //in memory rooms users list
 var rooms = {};
 
+function userSaveVisit(username, projectName) {
+    redisClient.zadd('user:' + username + ':recent', new Date().getTime(), projectName);
+    redisClient.zremrangebyrank('user:' + username + ':recent', 0, -11);
+}
+
 ws.on('connection', (socket) => {
     //this socket is authenticated, we are good to handle more events from it.
     var username = (<any>socket).decoded_token.username;
@@ -77,6 +82,7 @@ ws.on('connection', (socket) => {
             if (!hasRole) {
                 socket.disconnect(true);
             } else {
+                userSaveVisit(username, project);
                 socket.join(project + '-notifications');
                 socket.on('disconnect', function() {
                     delete rooms[project][socket.id];
@@ -618,6 +624,16 @@ app.get('/project/list', (req, res) => {
                 });
             });
         });
+    });
+});
+
+app.get('/project/recent', (req, res) => {
+    redisClient.zrevrange('user:' + req.user.username + ':recent', 0, -1, (err, list) => {
+        if (err) {
+            res.json([]);
+        } else {
+            res.json(list);
+        }
     });
 });
 
@@ -1419,6 +1435,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
 });
 
 app.get('/project/:project/csv', aclProject, (req, res) => {
+    userSaveVisit(req.user.username, req.params.project);
     res.sendFile(path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv'));
 });
 
@@ -1722,7 +1739,7 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
         console.log('custom_error_handler:', err.errorCode, err.msg);
         res.status(err.errorCode).json( err.msg );
     } else {
-        console.log('custom_error_handler_skip:', err)
+        console.log('custom_error_handler_skip:', err);
         next(err);
     }
 });
