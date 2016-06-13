@@ -368,9 +368,10 @@ app.get('/admin/du', aclAdmin, (req, res) => {
         size.stdout.setEncoding('utf8');
         let projects = {};
         let re = /(\d+)[\t ]+\.\/([^\/]*)\/?(.*)/;
-        size.stdout.on('data', function (data) {
+        let splitter = size.stdout.pipe(StreamSplitter('\n'));
+        splitter.encoding = 'utf8';
+        splitter.on('token', function(data) {
             let entry = re.exec(data.trim());
-            console.log(data, data.trim(), entry[1], entry[2], entry[3]);
             if (entry === null) {
                 return;
             }
