@@ -367,7 +367,7 @@ app.get('/admin/du', aclAdmin, (req, res) => {
         let size = childProcess.spawn('du', ['-k', '-d 2'], {cwd: PROJECTS_FOLDER});
         size.stdout.setEncoding('utf8');
         let projects = {};
-        let re = /(\d+)\t\.\/([^\/]*)\/?(.*)/;
+        let re = /(\d+)[\t ]+\.\/([^\/]*)\/?(.*)/;
         size.stdout.on('data', function (data) {
             let entry = re.exec(data.trim());
             if (entry === null) {
