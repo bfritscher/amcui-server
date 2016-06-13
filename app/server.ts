@@ -371,11 +371,13 @@ app.get('/admin/du', aclAdmin, (req, res) => {
         size.stdout.on('data', function (data) {
             let entry = re.exec(data.trim());
             if (entry === null) {
+                console.log('nomatch');
                 return;
             }
             if (!projects.hasOwnProperty(entry[2])) {
                 projects[entry[2]] = {total: 0, folders: []};
             }
+            console.log(data);
             console.log(entry[3]);
             if (entry[3] === '') {
                 projects[entry[2]].total = Number(entry[1]);
