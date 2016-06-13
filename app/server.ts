@@ -376,6 +376,7 @@ app.get('/admin/du', aclAdmin, (req, res) => {
             if (!projects.hasOwnProperty(entry[2])) {
                 projects[entry[2]] = {total: 0, folders: []};
             }
+            console.log(entry[3]);
             if (entry[3] === '') {
                 projects[entry[2]].total = Number(entry[1]);
             } else {

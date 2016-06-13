@@ -3,6 +3,8 @@ redis:
   restart: always
   volumes:
     - ./data:/data
+    - ./redis.conf:/usr/local/etc/redis/redis.conf
+  command: redis-server /usr/local/etc/redis/redis.conf
 amcuiserver:
   build: .
   env_file: .env
