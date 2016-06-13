@@ -50,7 +50,7 @@
       "single"
     ],
     "radix": true,
-    "semicolon": true,
+    "semicolon": [true, "always"],
     "triple-equals": [
       true,
       "allow-null-check"
