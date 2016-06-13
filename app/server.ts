@@ -370,15 +370,13 @@ app.get('/admin/du', aclAdmin, (req, res) => {
         let re = /(\d+)[\t ]+\.\/([^\/]*)\/?(.*)/;
         size.stdout.on('data', function (data) {
             let entry = re.exec(data.trim());
+            console.log(data, data.trim(), entry[1], entry[2], entry[3]);
             if (entry === null) {
-                console.log('nomatch');
                 return;
             }
             if (!projects.hasOwnProperty(entry[2])) {
                 projects[entry[2]] = {total: 0, folders: []};
             }
-            console.log(data);
-            console.log(entry[3]);
             if (entry[3] === '') {
                 projects[entry[2]].total = Number(entry[1]);
             } else {
