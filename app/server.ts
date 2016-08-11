@@ -804,6 +804,48 @@ app.post('/project/:project/remove', aclProject, (req, res) => {
     }
 });
 
+// rename project
+/*
+//check that destination does not exist
+// rename folder
+// rename redis exam:project
+addProjectAcl
+addAll users of project
+//delete old project
+
+*/
+
+app.post('/project/:project/delete', aclProject, (req, res) => {
+    let project = req.params.project;
+    if ( project.length === 0 || project.indexOf('.') === 0 ) { return res.sendStatus(404); }
+
+    acl.roleUsers(project, (err, users: string[]) => {
+        users.forEach((username) => {
+            acl.removeUserRoles(username, project);
+            redisClient.zrem('user:' + username + ':recent', project);
+        });
+        acl.removeAllow(project, '/project/' + project, 'admin');
+        acl.removeRole(project);
+        acl.removeResource(project);
+        redisClient.del('exam:' + project);
+        redisClient.keys('project:' + project + ':*', function (err, keys) {
+            keys.forEach(function (key) {
+                redisClient.del(key);
+            });
+        });
+        fs.remove(PROJECTS_FOLDER + '/' + project);
+    });
+    res.sendStatus(200);
+});
+
+/*
+
+archive project
+zip correction/scans...
+delete/recreate git
+flag as archive
+*/
+
 app.get('/project/:project/gitlogs', aclProject, (req, res) => {
     var g = git(PROJECTS_FOLDER + '/' + req.params.project);
     //use cI when git version supports it
