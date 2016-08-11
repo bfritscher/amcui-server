@@ -81,6 +81,14 @@ declare module "simple-git" {
     export = SimpleGit;
 }
 
+declare module "slug" {
+    module slug {
+        export var defaults:any;
+    }
+    function slug(text:string):string;
+    export = slug;
+}
+
 declare module "u2f" {
     interface Request {
         version:string,

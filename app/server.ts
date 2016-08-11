@@ -27,6 +27,9 @@ import git = require('simple-git');
 import u2f = require('u2f');
 //import AdmZip = require('adm-zip');
 import archiver = require('archiver');
+import slug = require('slug');
+slug.defaults.mode = 'rfc3986';
+
 import sizeOf = require('image-size');
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
@@ -649,7 +652,7 @@ function addProjectAcl(project, username) {
 
 function createProject(projectName, username, success, error){
 // create project
-    var project = projectName.toLowerCase();
+    var project = slug(projectName);
     if (project === 'admin') {
         return error();
     }
@@ -679,7 +682,7 @@ function createProject(projectName, username, success, error){
         ], null);
 
         if (success) {
-            success();
+            success(project);
         }
     } else {
         if (error) {
@@ -689,8 +692,8 @@ function createProject(projectName, username, success, error){
 }
 
 app.post('/project/create', (req, res) => {
-    createProject(req.body.project, req.user.username, () => {
-        res.sendStatus(200);
+    createProject(req.body.project, req.user.username, (project) => {
+        res.send(project);
     }, () => {
         res.status(403).send('Project already exists!');
     });
@@ -804,21 +807,47 @@ app.post('/project/:project/remove', aclProject, (req, res) => {
     }
 });
 
-// rename project
-/*
-//check that destination does not exist
-// rename folder
-// rename redis exam:project
-addProjectAcl
-addAll users of project
-//delete old project
+app.post('/project/:project/rename', aclProject, (req, res) => {
+    let project = req.params.project;
+    let newProject = slug(req.body.name);
+    if ( newProject.length === 0 || newProject.indexOf('.') === 0 ) { return res.sendStatus(404); }
+    //check that destination does not exists
 
-*/
+    let newPath = PROJECTS_FOLDER + '/' + newProject;
+    if (fs.existsSync(newPath)) {
+        return res.sendStatus(403);
+    }
+
+    fs.rename(PROJECTS_FOLDER + '/' + project, newPath, (err) => {
+        if (err) {
+            return res.status(500).send(err);
+        }
+        redisClient.renamenx('exam:' + project, 'exam:' + newProject);
+        acl.allow(newProject, '/project/' + newProject, 'admin');
+        acl.roleUsers(project, (err, users: string[]) => {
+            users.forEach((username) => {
+                acl.removeUserRoles(username, project);
+                acl.addUserRoles(username, newProject);
+                redisClient.zrem('user:' + username + ':recent', project);
+            });
+        });
+        redisClient.keys('project:' + project + ':*', function (err, keys) {
+                keys.forEach(function (key) {
+                    var entries = key.split(':');
+                    redisClient.renamenx(key, 'project:' + newProject + ':' + entries[2]);
+                });
+            });
+        acl.removeAllow(project, '/project/' + project, 'admin');
+        acl.removeRole(project);
+        acl.removeResource(project);
+        res.send(newProject);
+    });
+
+});
 
 app.post('/project/:project/delete', aclProject, (req, res) => {
     let project = req.params.project;
     if ( project.length === 0 || project.indexOf('.') === 0 ) { return res.sendStatus(404); }
-
     acl.roleUsers(project, (err, users: string[]) => {
         users.forEach((username) => {
             acl.removeUserRoles(username, project);
@@ -839,7 +868,6 @@ app.post('/project/:project/delete', aclProject, (req, res) => {
 });
 
 /*
-
 archive project
 zip correction/scans...
 delete/recreate git
