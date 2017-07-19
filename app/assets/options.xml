@@ -54,7 +54,7 @@ Regards.</email_text>
   <regroupement_compose></regroupement_compose>
   <regroupement_copies>ALL</regroupement_copies>
   <regroupement_type>STUDENTS</regroupement_type>
-  <seuil>0.15</seuil>
+  <seuil>0.55</seuil>
   <texsrc>source.tex</texsrc>
   <verdict>.
         %(ID)
@@ -65,7 +65,7 @@ Regards.</email_text>
   <symbole_0_1_color>#ff0000</symbole_0_1_color>
   <symbole_0_1_type>mark</symbole_0_1_type>
   <symbole_1_0_color>#ff0000</symbole_1_0_color>
-  <symbole_1_0_type>mark</symbole_1_0_type>
+  <symbole_1_0_type>circle</symbole_1_0_type>
   <symbole_1_1_color>#00ff00</symbole_1_1_color>
   <symbole_1_1_type>circle</symbole_1_1_type>
 </projetAMC>
