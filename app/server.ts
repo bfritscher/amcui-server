@@ -1516,7 +1516,7 @@ app.get('/project/:project/gradefiles', aclProject, (req, res) => {
         if (data) {
             res.send(data);
         } else {
-            res.sendStatus(404);
+            res.send([]);
         }
     });
 });
