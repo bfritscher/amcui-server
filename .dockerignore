@@ -1,5 +1,4 @@
 docker
-.env
 .production.env
 Dockerfile
 docker-compose.yml
