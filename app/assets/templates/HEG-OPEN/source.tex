@@ -1,197 +1,138 @@
 \documentclass[a4paper]{article}
 
-\usepackage[utf8x]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage[francais,lang=FR]{automultiplechoice}
-%%% completemulti, ensemble
-\usepackage{fp}
-\usepackage{array}
-\usepackage{tabularx}
-\usepackage{multirow}
-\usepackage{multicol}
-\usepackage{enumitem}
-\usepackage{courier}
-\usepackage{listings}
-\usepackage{color}
+  \usepackage[utf8x]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage[francais,lang=FR]{automultiplechoice}
+  \usepackage{fp}
+  \usepackage{array}
+  \usepackage{tabularx}
+  \usepackage{multirow}
+  \usepackage{multicol}
+  \usepackage{enumitem}
+  \usepackage{courier}
+  \usepackage{listings}
+  \usepackage{color}
 
-\usepackage{tikz} %for oval
-\usepackage[scaled]{helvet}
+  \usepackage{tikz} %for oval
+  \usepackage[scaled]{helvet}
 
-\definecolor{lightgray}{rgb}{.9,.9,.9}
-\definecolor{darkgray}{rgb}{.2,.2,.2}
-\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+  \definecolor{lightgray}{rgb}{.9,.9,.9}
+  \definecolor{darkgray}{rgb}{.2,.2,.2}
+  \definecolor{purple}{rgb}{0.65, 0.12, 0.82}
 
-\renewcommand{\familydefault}{\sfdefault}
+  \renewcommand{\familydefault}{\sfdefault}
 
-%%% fix Openquestion bug until version 1.3
-\def\AMCOpen{\hfill\AMCformatChoices{\AMCopenShow}{\AMCopenHide}}
+  %%% fix Openquestion bug until version 1.3
+  \def\AMCOpen{\hfill\AMCformatChoices{\AMCopenShow}{\AMCopenHide}}
 
-\lstdefinelanguage{JavaScript}{
-  keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, for, do, else, case, break},
-  keywordstyle=\color{blue}\bfseries,
-  ndkeywords={class, export, boolean, throw, implements, import, this},
-  ndkeywordstyle=\color{darkgray}\bfseries,
-  identifierstyle=\color{black},
-  sensitive=false,
-  comment=[l]{//},
-  morecomment=[s]{/*}{*/},
-  commentstyle=\color{purple}\ttfamily,
-  stringstyle=\color{darkgray}\ttfamily,
-  morestring=[b]',
-  morestring=[b]"
-}
+  \lstdefinelanguage{JavaScript}{
+    keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, for, do, else, case, break},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={class, export, boolean, throw, implements, import, this},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=false,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{purple}\ttfamily,
+    stringstyle=\color{darkgray}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+  }
 
-\lstset{
-   language=JavaScript,
-   %backgroundcolor=\color{lightgray},
-   extendedchars=true,
-   inputencoding=utf8x,
-   literate={é}{{\'e}}1 {ê}{{\^{e}}}1 {è}{{\`{e}}}1 {à}{{\`{a}}}1,
-   basicstyle=\footnotesize\ttfamily,
-   showstringspaces=false,
-   showspaces=false,
-   numbers=left,
-   numberstyle=\footnotesize,
-   numbersep=9pt,
-   tabsize=2,
-   breaklines=true,
-   showtabs=false,
-   captionpos=b,
-   escapeinside={(*@}{@*)}
-}
+  \lstset{
+     language=JavaScript,
+     %backgroundcolor=\color{lightgray},
+     extendedchars=true,
+     inputencoding=utf8x,
+     literate={é}{{\'e}}1 {ê}{{\^{e}}}1 {è}{{\`{e}}}1 {à}{{\`{a}}}1,
+     basicstyle=\footnotesize\ttfamily,
+     showstringspaces=false,
+     showspaces=false,
+     numbers=left,
+     numberstyle=\footnotesize,
+     numbersep=9pt,
+     tabsize=2,
+     breaklines=true,
+     showtabs=false,
+     captionpos=b,
+     escapeinside={(*@}{@*)}
+  }
 
-
+%%% Change page border
 %%% \geometry{hmargin=3cm,headheight=2cm,headsep=.3cm,footskip=1cm,top=3.5cm,bottom=2.5cm}
 
 \begin{document}
 
-\AMCrandomseed{1237893}
-\AMCboxColor{red}
-\AMCboxDimensions{shape=oval}
+  \AMCrandomseed{1237893}
+  \AMCboxColor{red}
+  \AMCboxDimensions{shape=oval}
 
 
-%%% Scoring strategy:
-\scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
+  %%% Scoring strategy:
+  \scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
+
+  \def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
+
+  %%% liste des questions:
+  \input{questions_definition.tex}
+
+  \begin{examcopy}[1]
+
+    %%% debut de l'en-tête des copies :
+    \setlength{\parindent}{0pt}
+
+    \noindent{\hfill \includegraphics[]{src/graphics/logo_heg.png}}
+
+    \vspace{2.5ex}
+
+    \noindent\rule{\textwidth}{1pt}
+    \vspace{0.4ex}
+    \begin{center}
+    \noindent{\LARGE\textbf{Examen de fin de semestre - Session \AMCUIsession}}
+    \end{center}
+    \noindent\rule{\textwidth}{1pt}
+
+    \vspace*{2cm}
+
+    {\renewcommand{\arraystretch}{4}
+    \begin{tabularx}{15cm}{@{}p{6cm}p{0.5cm}p{7cm}@{}}
+    \underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\
+    \underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\
+    \underline{Consignes} & : & Ne répondez que sur la feuille de réponses! Aucune autre réponse ne sera prise en compte. Bon travail \\
+    \end{tabularx}
+    }
+
+    \vspace*{2cm}
+
+    {\renewcommand{\arraystretch}{0}
+    \begin{tabularx}{15cm}{@{}p{6cm}p{0.1cm}@{}p{7.4cm}}
+    \hline
+    \vspace{15pt}\underline{Nom et prénom de l'étudiant-e} & \vspace{18pt}: & \champnom{{\begin{minipage}[t][1.5cm][c]{8.3cm}\hfill{}\end{minipage}}} \\ \hline
+    \end{tabularx}
+    }
+
+
+    \vspace*{4cm}Visa du/des professeur(s): \dotfill
+
+
+    \vfill
+    \noindent{\hfill \includegraphics[scale=0.4]{src/graphics/logo_hes-so.pdf}}
+    %%% fin de l'en-tête
+    \newpage
+
+    {
+    \em\setlength{\parindent}{0pt}
+
+    Les questions faisant apparaître le symbole \multiSymbole{} peuvent
+      comporter une ou plusieurs bonnes réponses. Les autres ont
+      une unique bonne réponse. Les points sont spécifiés pour chaque question. Si aucune information n'est donnée, la question vaut un point.
+
+    }\hspace*{\fill}
+    \vspace{1ex}
 
 
 
-
-\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
-
-%%% liste des questions:
-\input{questions_definition.tex}
-
-\exemplaire{1}{
-
-%%% debut de l'en-tête des copies :
-\setlength{\parindent}{0pt}
-
-\noindent{\textbf{
-%%% Examen de fin de semestre
-} \hfill \includegraphics[]{src/graphics/logo_heg.png}}
-
-\vspace{2ex}
-
-\noindent{\textbf{\AMCUIclasses} \hfill \bf Session \AMCUIsession}
-
-\AMCUIcourse  \hfill \AMCUIteacher
-
-\vspace*{1cm}
-
-{\renewcommand{\arraystretch}{4}
-\begin{tabularx}{15cm}{p{6cm}p{0.5cm}p{7cm}}
-\hline
-\underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\ \hline
-\underline{Professeur-e/s} & : & \textbf{\AMCUIteacher}  \\ \hline
-\underline{Moyens auxiliaires autorises} & : & \textbf{Toute documentation papier} \\ \hline
-\underline{Date} & : & \textbf{\AMCUIdate} \\ \hline
-\underline{Temps à disposition} & : & \textbf{\AMCUIduration} \\ \hline
-\underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\ \hline
-\underline{Consignes} & : & Écrire au stylo noir ou bleu. Bon travail \\ \hline
-\underline{Nom et prénom de l'étudiant-e} & : & \\ \hline
-\end{tabularx}
-}
-
-
-\vspace*{2cm}Visa du professeur: \dotfill
-\newpage
-
-%%% \vspace{3cm}
-%%%
-%%% \begin{center}
-%%% \textit{Cette page a été laissée intentionnellement blanche}
-%%% \end{center}
-
-
-%%%  \newpage
-%\multicolumn{1}{|c|}{\bf
-
-%%% {
-%%% \em\setlength{\parindent}{0pt}
-%%%
-%%% Les questions faisant apparaître le symbole \multiSymbole{} peuvent
-%%% présenter une ou plusieurs bonnes réponses. Les autres ont
-%%%   une unique bonne réponse.
-%%% \newline
-%%%
-%%% A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distribuée avec l'énoncé.
-%%%  Les deux documents doivent porter votre nom et prénom.
-%%% \newline
-%%%
-%%%
-%%% }\hspace*{\fill}
-\vspace{1ex}
-
-%%% fin de l'en-tête
-
-%% \AMCcode{etu}{2}
-%% \hspace*{\fill}
-
-\begin{minipage}[b]{6.5cm}
-%% \setlength{\parindent}{0pt}
-%% $\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
-%% et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
-%% \vspace{3ex}
-
-\champnom{
-  \fbox{
-    \begin{minipage}{.9\linewidth}
-      Nom:
-
-      \vspace*{.5cm}\dotfill
-
-      Prénom:
-
-      \vspace*{.5cm}\dotfill
-
-      \vspace*{1mm}
-    \end{minipage}
-  }
-}
-  \hfill\vspace{5ex}
-  \end{minipage}
-
-  \vspace{1ex}
-{\bf\em\setlength{\parindent}{0pt} Les réponses aux questions sont à donner \textit{exclusivement} sur cette feuille: les réponses données sur d'autres feuilles ne seront \textit{pas prises en compte}.
-
-
-%%% Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
-%%% par rapport à une case vide. Ne coloriez pas les cases au crayon à papier,
-
-N'utilisez pas de couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
-
-%%% Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un correcteur liquide (Tipp-Ex).
-
-\vspace{1ex}
-Pour les questions ouvertes NE PAS COCHER les cases de points!
-}
-
-\input{questions_layout.tex}
-
-
-%%% \AMCdebutFormulaire
-
-%%% début de l'en-tête de la feuille de réponses
-}
-
+    \input{questions_layout.tex}
+  \end{examcopy}
 \end{document}
