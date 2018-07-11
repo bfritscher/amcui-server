@@ -15,11 +15,22 @@
 \usepackage{tikz} %for oval
 \usepackage[scaled]{helvet}
 
+%%% make smaller title spacing in answer sheets
+\usepackage{titlesec}
+
+\titleformat{\section}
+  {\normalfont\fontsize{12}{12}\bfseries}{\thesection}{0.5em}{}
+\titlespacing{\section}{0pt}{4pt}{0pt}
+%%%
+
 \definecolor{lightgray}{rgb}{.9,.9,.9}
 \definecolor{darkgray}{rgb}{.2,.2,.2}
 \definecolor{purple}{rgb}{0.65, 0.12, 0.82}
 
 \renewcommand{\familydefault}{\sfdefault}
+
+%%% fix Openquestion bug until version 1.3
+\def\AMCOpen{\hfill\AMCformatChoices{\AMCopenShow}{\AMCopenHide}}
 
 \lstdefinelanguage{JavaScript}{
   keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, for, do, else, case, break},

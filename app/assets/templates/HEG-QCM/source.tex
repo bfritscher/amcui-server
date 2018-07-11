@@ -2,7 +2,11 @@
 
 \usepackage[utf8x]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[francais,lang=FR,bloc,completemulti,ensemble,automarks]{automultiplechoice}
+%%% automarks: cancel marks printing on the subject pages
+%%% completemulti: automatically adds a "None of these answers are correct"
+%%% ensemble?
+\usepackage[francais,lang=FR,completemulti,ensemble,automarks]{automultiplechoice}
+\usepackage{fp}
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{multirow}
@@ -15,6 +19,14 @@
 
 \usepackage{tikz} %for oval
 \usepackage[scaled]{helvet}
+
+%%% make smaller title spacing in answer sheets
+\usepackage{titlesec}
+
+\titleformat{\section}
+  {\normalfont\fontsize{12}{12}\bfseries}{\thesection}{0.5em}{}
+\titlespacing{\section}{0pt}{4pt}{0pt}
+%%%
 
 \definecolor{lightgray}{rgb}{.9,.9,.9}
 \definecolor{darkgray}{rgb}{.2,.2,.2}
@@ -38,179 +50,181 @@
 }
 
 \lstset{
-   language=JavaScript,
-   %backgroundcolor=\color{lightgray},
-   extendedchars=true,
-   inputencoding=utf8x,
-   literate={é}{{\'e}}1 {ê}{{\^{e}}}1 {è}{{\`{e}}}1 {à}{{\`{a}}}1,
-   basicstyle=\footnotesize\ttfamily,
-   showstringspaces=false,
-   showspaces=false,
-   numbers=left,
-   numberstyle=\footnotesize,
-   numbersep=9pt,
-   tabsize=2,
-   breaklines=true,
-   showtabs=false,
-   captionpos=b,
-   escapeinside={(*@}{@*)}
+    language=JavaScript,
+    %backgroundcolor=\color{lightgray},
+    extendedchars=true,
+    inputencoding=utf8x,
+    literate={é}{{\'e}}1 {ê}{{\^{e}}}1 {è}{{\`{e}}}1 {à}{{\`{a}}}1,
+    basicstyle=\footnotesize\ttfamily,
+    showstringspaces=false,
+    showspaces=false,
+    numbers=left,
+    numberstyle=\footnotesize,
+    numbersep=9pt,
+    tabsize=2,
+    breaklines=true,
+    showtabs=false,
+    captionpos=b,
+    escapeinside={(*@}{@*)}
 }
 
 \begin{document}
 
-\AMCrandomseed{1237893}
-\AMCboxColor{red}
-\AMCboxDimensions{shape=oval}
+  \AMCrandomseed{1237893}
+  \AMCboxColor{red}
+  \AMCboxDimensions{shape=oval}
 
 
-%%% Scoring strategy:
-\scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
-%\scoringDefaultS{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
+  %%% Scoring strategy:
+  \scoringDefaultM{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
+  %\scoringDefaultS{e=0,v=0,b=0,m=0,p=0,d=0,mz=1}
 
-\def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
+  \def\AMCformQuestion#1{\vspace{\AMCformVSpace}\par {\sc Question #1 :} }
 
-%%% liste des questions:
-\input{questions_definition.tex}
+  %%% liste des questions:
+  \input{questions_definition.tex}
 
-\exemplaire{1}{
+  \begin{examcopy}[1]
 
-%%% debut de l'en-tête des copies :
-\setlength{\parindent}{0pt}
+    %%% debut de l'en-tête des copies :
+    \setlength{\parindent}{0pt}
 
-\noindent{\textbf{Examen de fin de semestre} \hfill \includegraphics[]{src/graphics/logo_heg.png}}
+    \noindent{\hfill \includegraphics[]{src/graphics/logo_heg.png}}
 
-\vspace{2ex}
+    \vspace{2.5ex}
 
-\noindent{\textbf{\AMCUIclasses} \hfill \bf Session \AMCUIsession}
+    \noindent\rule{\textwidth}{1pt}
+    \vspace{0.4ex}
+    \begin{center}
+    \noindent{\LARGE\textbf{Examen de fin de semestre - Session \AMCUIsession}}
+    \end{center}
+    \noindent\rule{\textwidth}{1pt}
 
-\vspace*{1cm}
+    \vspace*{2cm}
 
-{\renewcommand{\arraystretch}{4}
-\begin{tabularx}{15cm}{p{6cm}p{0.5cm}p{7cm}}
-\hline
-\underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\ \hline
-\underline{Professeur-e/s} & : & \textbf{\AMCUIteacher}  \\ \hline
-\underline{Moyens auxiliaires autorises} & : & \textbf{Toute documentation autorisée} \\ \hline
-\underline{Date} & : & \textbf{\AMCUIdate} \\ \hline
-\underline{Temps à disposition} & : & \textbf{\AMCUIduration} \\ \hline
-\underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\ \hline
-\underline{Consignes} & : & Ne répondez que sur la feuille de réponses! Aucune autre réponse ne sera prise en compte. Bon travail \\ \hline
-\underline{Nom et prénom de l'étudiant-e} & : & \\ \hline
-\end{tabularx}
-}
-
-
-\vspace*{2cm}Visa du professeur: \dotfill
-
-\newpage
-
-\vspace{3cm}
-
-\begin{center}
-	\textit{Cette page a été laissée intentionnellement blanche}
-\end{center}
+    {\renewcommand{\arraystretch}{4}
+    \begin{tabularx}{15cm}{@{}p{6cm}p{0.5cm}p{7cm}@{}}
+    \underline{Unité d'enseignement} & : & \textbf{\AMCUIcourse}    \\
+    \underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\
+    \underline{Consignes} & : & Ne répondez que sur la feuille de réponses! Aucune autre réponse ne sera prise en compte. Bon travail \\
+    & & \\
+    \hline
+    \underline{Nom et prénom de l'étudiant-e} & : & \\[10pt]
+    \hline
+    \end{tabularx}
+    }
 
 
-\newpage
-%\multicolumn{1}{|c|}{\bf
-
-{
-\em\setlength{\parindent}{0pt}
-
-Les questions faisant apparaître le symbole \multiSymbole{} peuvent
-  présenter une ou plusieurs bonnes réponses. Les autres ont
-  une unique bonne réponse.
-\newline
-
-A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distribuée avec l'énoncé.
-  Les deux documents doivent porter votre nom et prénom.
-\newline
+    \vspace*{4cm}Visa du/des professeur(s): \dotfill
 
 
-}\hspace*{\fill}
-\vspace{1ex}
+    \vfill
+    \noindent{\hfill \includegraphics[scale=0.4]{src/graphics/logo_hes-so.pdf}}
+    %%% fin de l'en-tête
+    \newpage
 
-%%% fin de l'en-tête
+    \vspace{3cm}
 
-\input{questions_layout.tex}
-
-%\includepdf[pages=-]{src/Feuilles_de_brouillon_2015.pdf}
-
-\AMCcleardoublepage
-
-\AMCdebutFormulaire
-
-%%% début de l'en-tête de la feuille de réponses
-{\large\bf\noindent Feuille de réponses}
-
-{\setlength{\parindent}{0pt}\hspace*{\fill}
-
-%% \AMCcode{etu}{3}\hspace*{\fill}
-\begin{minipage}[b]{6.5cm}\setlength{\parindent}{0pt}
-%% $\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
-%% et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
-
-\vspace{1ex}
-
-\hfill\champnom{\fbox{
-    \begin{minipage}{.9\linewidth}
-      Nom:
-
-      \vspace*{.5cm}\dotfill
-
-      Prénom:
-
-      \vspace*{.5cm}\dotfill
-
-      \vspace*{1mm}
-    \end{minipage}
-  }}\hfill\vspace{1ex}
-
-\end{minipage}\hspace*{\fill}
-
-}
-
-\vspace{1ex}
-
-{\bf\em\setlength{\parindent}{0pt} Les réponses aux questions sont à donner \textit{exclusivement} sur cette feuille:
-  les réponses données sur d'autres feuilles ne seront \textit{pas prises en compte}.
-
-\vspace{1ex}
-Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
-par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de
-couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
-Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un correcteur liquide (Tipp-Ex).
-}
-
-\vspace{1ex}
-
-%%% fin de l'en-tête de la feuille de réponses
-
-\begin{multicols}{2}
-\setlength{\parindent}{0pt}
-\formulaire
-\end{multicols}
+    \begin{center}
+      \textit{Cette page a été laissée intentionnellement blanche}
+    \end{center}
 
 
-\vspace{20ex}
+    \newpage
 
-\fbox{%
-\parbox{\textwidth}{
-\textbf{Remarques à chaud}
-\newline
+    {
+    \em\setlength{\parindent}{0pt}
 
-\textit{Cet espace de liberté est mis à votre disposition pour toutes les remarques que vous désirez faire maintenant que le semestre et l'examen sont terminés... Le scanner n'arriveras pas à déchiffrer votre prose... il n'y a pas de risque que ça influence la correction!}
+    Les questions faisant apparaître le symbole \multiSymbole{} peuvent
+      présenter une ou plusieurs bonnes réponses. Les autres ont
+      une unique bonne réponse.
+    \newline
 
-\vspace{9cm}
-Bonnes vacances!
-\newline
-}}
-
-
+    A la fin de l'examen, vous rendrez cet énoncé et la feuille de réponses distribuée avec l'énoncé.
+      Les deux documents doivent porter votre nom et prénom.
+    \newline
 
 
-\clearpage
+    }\hspace*{\fill}
+    \vspace{1ex}
 
-}
+    \input{questions_layout.tex}
+
+    \AMCcleardoublepage
+
+    \AMCdebutFormulaire
+
+    %%% début de l'en-tête de la feuille de réponses
+    {\large\bf\noindent Feuille de réponses}
+
+    {\setlength{\parindent}{0pt}\hspace*{\fill}
+
+    %% \AMCcode{etu}{3}\hspace*{\fill}
+    \begin{minipage}[b]{6.5cm}\setlength{\parindent}{0pt}
+    %% $\longleftarrow{}$\hspace{0pt plus 1cm} veuillez ne rien coder ci-contre,
+    %% et inscrire votre nom et prénom \textit{lisiblement} ci-dessous.
+
+    \vspace{1ex}
+
+    \hfill\champnom{\fbox{
+        \begin{minipage}{.9\linewidth}
+          Nom:
+
+          \vspace*{.5cm}\dotfill
+
+          Prénom:
+
+          \vspace*{.5cm}\dotfill
+
+          \vspace*{1mm}
+        \end{minipage}
+      }}\hfill\vspace{1ex}
+
+    \end{minipage}\hspace*{\fill}
+
+    }
+
+    \vspace{1ex}
+
+    {\bf\em\setlength{\parindent}{0pt} Les réponses aux questions sont à donner \textit{exclusivement} sur cette feuille:
+      les réponses données sur d'autres feuilles ne seront \textit{pas prises en compte}.
+
+    \vspace{1ex}
+    Coloriez complètement et proprement chaque case choisie, afin d'obtenir le meilleur contraste possible
+    par rapport à une case vide. Ne coloriez pas les cases au crayon à papier, n'utilisez pas de
+    couleur rouge (le programme correcteur ne voit pas les couleurs). Utilisez plutôt du noir ou du bleu foncé.
+    Pour corriger une éventuelle erreur de saisie, veuillez utiliser si possible un correcteur liquide (Tipp-Ex).
+    }
+
+    \vspace{1ex}
+
+    %%% fin de l'en-tête de la feuille de réponses
+
+    \begin{multicols}{2}
+    \setlength{\parindent}{0pt}
+    \formulaire
+    \end{multicols}
+
+
+    \vspace{20ex}
+
+    \fbox{%
+    \parbox{\textwidth}{
+    \textbf{Remarques à chaud}
+    \newline
+
+    \textit{Cet espace de liberté est mis à votre disposition pour toutes les remarques que vous désirez faire maintenant que le semestre et l'examen sont terminés... Le scanner n'arriveras pas à déchiffrer votre prose... il n'y a pas de risque que ça influence la correction!}
+
+    \vspace{9cm}
+    Bonnes vacances!
+    \newline
+    }}
+
+
+
+
+    \clearpage
+
+  \end{examcopy}
 
 \end{document}

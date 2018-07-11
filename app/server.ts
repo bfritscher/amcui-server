@@ -2,35 +2,82 @@
 
 require('dotenv').load();
 require('source-map-support').install();
+// Raven.js is the official browser JavaScript client for Sentry. It automatically reports uncaught 
+// JavaScript exceptions triggered from a browser environment, and provides a rich API for reporting your own errors.
 import raven = require('raven');
+// The fs module provides an API for interacting with the file system in a manner closely modeled around standard POSIX functions.
+// fs-extra is a drop in replacement for native fs. All methods in fs are unmodified and attached to fs-extra
 import fs = require('fs-extra');
+// https://github.com/samcday/node-stream-splitter
+// Allows to split streams, in style !
 import StreamSplitter = require("stream-splitter");
+// CORS is a node.js package for providing a Connect/Express middleware that can be used to enable CORS with various options.
 import cors = require('cors');
+// Express.js, or simply Express, is a web application framework for Node.js. 
+// It is designed for building web applications and APIs.
 import express = require('express');
+// Socket.IO enables real-time bidirectional event-based communication. It consists in:
+// a nodejs server and a javascript client library
 import io = require('socket.io');
+// Parse incoming request bodies in a middleware before your handlers, available under the req.body property.
 import bodyParser = require('body-parser');
+// This middleware is only intended to be used in a development environment, as the full error stack traces 
+// and internal details of any object passed to this module will be sent back to the client when an error occurs.
 import errorHandler = require('errorhandler');
+/*
+    node-sqlite3 has built-in function call serialization and automatically waits before executing a blocking action
+    until no other action is pending.
+*/
 import sqlite3 = require('sqlite3');
+// The path module provides utilities for working with file and directory paths.
 import path = require('path');
+/*
+JSON Web Token (JWT) is a compact claims representation format
+intended for space constrained environments such as HTTP
+Authorization headers and URI query parameters.
+*/
 import jwt = require('jsonwebtoken');
+// Authenticate socket.io incoming connections with JWTs.
 import socketioJwt = require('socketio-jwt');
+/*
+This module lets you authenticate HTTP requests using JWT tokens in your Node.js applications.
+JWTs are typically used to protect API endpoints, and are often issued using OpenID Connect.
+*/
 import expressJwt = require('express-jwt');
+// Lib to help you hash passwords
 import bcrypt = require('bcrypt');
+// This is a complete and feature rich Redis client for node.js. It supports all Redis commands and focuses on high performance
 import redis = require('redis');
+// Simple XML to JavaScript object converter. It supports bi-directional conversion. Uses sax-js and xmlbuilder-js.
 import xml2js = require('xml2js');
+// Like mkdir -p, but in node.js! (p for parent)
 import mkdirp = require('mkdirp');
+// Create roles and assign roles to users.
 import Acl = require('acl');
+/*
+ Connect is a simple framework to glue together various "middleware" to handle requests.
+ multiparty Parse http requests with content-type multipart/form-data, also known as file uploads.
+ connect-multiparty connects middleware for multiparty.
+*/
 import multiparty = require('connect-multiparty');
+// Temporary file and directory creator
 import tmp = require('tmp');
+// The child_process module provides the ability to spawn child processes in a manner that is similar, but not identical, to popen(3).
 import childProcess = require('child_process');
+// A light weight interface for running git commands in any node.js application.
 import git = require('simple-git');
+// This is a simple library to register and check signatures provided by U2F clients/devices.
 import u2f = require('u2f');
 //import AdmZip = require('adm-zip');
+// a streaming interface for archive generation
 import archiver = require('archiver');
+// slugifies every string, even when it contains unicode!
 import slug = require('slug');
 slug.defaults.mode = 'rfc3986';
 
+// A Node module to get dimensions of any image file
 import sizeOf = require('image-size');
+// Enables real-time collaborative editing of arbitrary JSON objects
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
 
@@ -1124,7 +1171,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
         ws.to(project + '-notifications').emit('print', {action: 'start'});
 
 
-        projectOptions( req.params.project, (err, result) => {
+        ( req.params.project, (err, result) => {
             //sujet.pdf, catalog.pdf, calage.xy
             amcCommande(null, PROJECT_FOLDER, project, 'generating pdf', [
                 'prepare', '--with', 'pdflatex', '--filter', 'latex',
