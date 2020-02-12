@@ -1,20 +1,23 @@
-redis:
-  image: redis:3
-  volumes:
-    - ./data:/data
-  ports:
-    - "6379:6379"
-amcuiserver:
-  build: .
-  env_file: .env
-  command: bash -c "while true; do sleep 3; grunt serve; done"
-  working_dir: /amc
-  volumes:
-    - ./app:/amc/app
-    - ./projects:/amc/projects
-  ports:
-    - "8181:8181"
-    - "5858:5858"
-    - "9001:9001"
-  links:
-    - redis:redis
+version: "3"
+
+services:
+  redis:
+    image: redis
+    volumes:
+      - ./data:/data
+    ports:
+      - "6379:6379"
+  amcuiserver:
+    build: .
+    env_file: .env
+    command: npm run debug
+    working_dir: /amc
+    volumes:
+      - ./app:/amc/app
+      - ./projects:/amc/projects
+    ports:
+      - "8181:8181"
+      - "5858:5858"
+      - "9001:9001"
+    depends_on:
+      - redis

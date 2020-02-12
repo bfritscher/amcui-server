@@ -1,8 +1,4 @@
-///<reference path="../typings/tsd.d.ts" />
-
-require('dotenv').load();
-require('source-map-support').install();
-import raven = require('raven');
+require('dotenv').config();
 import fs = require('fs-extra');
 import StreamSplitter = require("stream-splitter");
 import cors = require('cors');
@@ -25,7 +21,7 @@ import tmp = require('tmp');
 import childProcess = require('child_process');
 import git = require('simple-git');
 import u2f = require('u2f');
-//import AdmZip = require('adm-zip');
+
 import archiver = require('archiver');
 import slug = require('slug');
 slug.defaults.mode = 'rfc3986';
@@ -34,21 +30,43 @@ import sizeOf = require('image-size');
 import diffSync= require('diffsync');
 import redisDataAdapter = require('./diffsyncredis');
 
-var ravenClient = new raven.Client( process.env.SENTRY_DSN || '');
-ravenClient.patchGlobal(function(sent, err) {
-  console.log('patchGlobal', err.stack);
-  process.exit(1);
-});
+// This allows TypeScript to detect our global value
+declare global {
+    namespace NodeJS {
+      interface Global {
+        __rootdir__: string;
+      }
+    }
+    namespace Express {
+        export interface Request {
+            user: any;
+        }
+    }
+  }
+
+  global.__rootdir__ = __dirname || process.cwd();
+
+import * as Sentry from '@sentry/node';
+import { RewriteFrames } from '@sentry/integrations';
+
+if (process.env.SENTRY_DSN) {
+    Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [new RewriteFrames({
+        root: global.__rootdir__
+    })]
+    });
+}
 
 var multipartMiddleware = multiparty();
 
 var APP_FOLDER = path.resolve(__dirname, '../app/');
 var PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 
-var redisClient = redis.createClient(process.env.REDIS_PORT_6379_TCP_PORT, process.env.REDIS_PORT_6379_TCP_ADDR, {});
+var redisClient = redis.createClient(6379, 'redis', {});
 redisClient.on('error', function (err) {
     console.log('Redis error ' + err);
-    ravenClient.captureException(err);
+    Sentry.captureException(err);
 });
 var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
 /*
@@ -58,7 +76,7 @@ var acl = new Acl(new Acl.redisBackend(redisClient, 'acl')
 */);
 
 var app = express();
-app.use(raven.middleware.express.requestHandler(process.env.SENTRY_DSN));
+app.use(Sentry.Handlers.requestHandler());
 var server = require('http').Server(app);
 var ws = io(server);
 
@@ -66,6 +84,7 @@ var ws = io(server);
 ws.use(socketioJwt.authorize({
     secret: process.env.JWT_SECRET,
     timeout: 15000, // 15 seconds to send the authentication message
+    decodedPropertyName: 'decoded_token',
     handshake: true
 }));
 
@@ -242,6 +261,7 @@ function projectThreshold(project: string, callback: (err, res) => void) {
 
 function amcCommande(res, cwd, project: string, msg: string, params: string[], callback, error?){
     ws.to(project + '-notifications').emit('log', {command: params[0], msg: msg, action: 'start', params: params});
+    console.log(params);
     var amc = childProcess.spawn('auto-multiple-choice', params, {
         cwd: cwd
     });
@@ -268,16 +288,18 @@ function amcCommande(res, cwd, project: string, msg: string, params: string[], c
                 callback(log);
             }
         } else {
-            redisClient.hset('project:' + project + ':status', 'locked', 0);
+            redisClient.hset('project:' + project + ':status', 'locked', '0');
             if (error) {
                 error();
             }
+            const debug = {
+                log: log,
+                command: params,
+                errorlog: errorlog,
+                error: code
+            };
             if (res) {
-                res.json({
-                    log: log,
-                    command: params,
-                    errorlog: errorlog,
-                    error: code});
+                res.json(debug);
             }
         }
     });
@@ -291,13 +313,8 @@ app.get('/testerror', (req, res) => {
     throw 'Error Test';
 });
 
-app.get('/testraven', (req, res) => {
-    try {
-        throw 'Error Test Raven';
-    } catch (e) {
-        ravenClient.captureException(e);
-        res.send('error catched and sent');
-    }
+app.get('/debug-sentry', (req, res) => {
+    throw new Error('Sentry express test');
 });
 
 acl.allow('admin', '/admin', 'admin');
@@ -412,7 +429,7 @@ app.post('/admin/addtoproject', aclAdmin, (req, res) => {
     acl.addUserRoles(req.user.username, req.body.project);
     let msg = `ADMIN: ${req.user.username} added himself to ${req.body.project}`;
     console.log(msg);
-    ravenClient.captureMessage(msg);
+    Sentry.captureMessage(msg);
     res.sendStatus(200);
 });
 
@@ -420,7 +437,7 @@ app.post('/admin/removefromproject', aclAdmin, (req, res) => {
     acl.removeUserRoles(req.user.username, req.body.project);
     let msg = `ADMIN: ${req.user.username} removed himself from ${req.body.project}`;
     console.log(msg);
-    ravenClient.captureMessage(msg);
+    Sentry.captureMessage(msg);
     res.sendStatus(200);
 });
 
@@ -713,7 +730,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
     var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/options.xml');
     var builder = new xml2js.Builder();
     var xml = builder.buildObject({projetAMC: req.body.options});
-    fs.writeFile(filename, xml, function(err, data) {
+    fs.writeFile(filename, xml, function(err) {
         if (err) {
             res.sendStatus(500);
         } else {
@@ -905,7 +922,7 @@ app.post('/project/:project/revert', aclProject, (req, res) => {
     var g = git(PROJECTS_FOLDER + '/' + req.params.project);
     g._run(['reset', '--hard', req.body.sha], (err, data) => {
         if (err) {
-            ravenClient.captureException(err);
+            Sentry.captureException(err);
             res.status(500).send(err);
         }
         var json = path.resolve(PROJECTS_FOLDER, req.params.project + '/data.json');
@@ -916,7 +933,7 @@ app.post('/project/:project/revert', aclProject, (req, res) => {
 app.get('/project/:project/zip', aclProject, (req, res) => {
     var zip = archiver('zip');
     res.on('close', function() {
-        return res.sendStatus(200).end();
+        return res.end();
     });
     res.attachment(req.params.project + '.zip');
     zip.pipe(res);
@@ -938,15 +955,6 @@ app.get('/project/:project/static/:file*', aclProject, (req, res) => {
         }
     });
 });
-
-/*
-var zip = new AdmZip("./my_file.zip");
-zip.extractAllTo(/target path/"/home/me/zipcontent/", /overwrite/true);
-zip.addFile("test.txt", new Buffer("inner content of the file"), "entry comment goes here");
-    // add local file
-    zip.addLocalFile("/home/me/some_picture.png");
-var willSendthis = zip.toBuffer();
-*/
 
 function makeThumb(project, filename, id, callback){
     var GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + project + '/src/graphics/';
@@ -1041,13 +1049,13 @@ function commitGit(project, username, message){
     ._run(['add', '--all', '.'], (err) => {
         if (err) {
             console.log('add', err);
-            ravenClient.captureException(err);
+            Sentry.captureException(err);
         }
     })
     ._run(['commit', '--author=' + username + ' <' + username + '@amcui.ig.he-arc.ch>', '-m', message], (err, data) => {
         if (err) {
             console.log('commit', err);
-            ravenClient.captureException(err);
+            Sentry.captureException(err);
         }
     });
 }
@@ -1060,7 +1068,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     redisClient.set(keyQueue, JSON.stringify(req.body), compilePreview);
 
     function compilePreviewEnd() {
-        redisClient.hset(keyStatus, 'preview', 0);
+        redisClient.hset(keyStatus, 'preview', '0');
         compilePreview();
     }
 
@@ -1071,7 +1079,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
 
     function compilePreview() {
         redisClient.hgetall(keyStatus, (err, status) => {
-            if (status && (status.locked > 0 || status.preview > 0)) {
+            if (status && (status.locked > '0' || status.preview > '0')) {
                 //wait
                 setTimeout(compilePreview, 1000);
             } else {
@@ -1079,7 +1087,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
                     if (data) {
                         redisClient.del(keyQueue);
                         var body = JSON.parse(data);
-                        redisClient.hset(keyStatus, 'preview', 1);
+                        redisClient.hset(keyStatus, 'preview', '1');
                         //compile
                         saveSourceFilesSync(project, body);
                         amcCommande(null, PROJECTS_FOLDER + '/' + project, project, 'preview', [
@@ -1129,7 +1137,8 @@ app.post('/project/:project/print', aclProject, (req, res) => {
             amcCommande(null, PROJECT_FOLDER, project, 'generating pdf', [
                 'prepare', '--with', 'pdflatex', '--filter', 'latex',
                 '--mode', 's[c]', '--n-copies', result.projetAMC.nombre_copies, 'source.tex',
-                '--prefix', PROJECT_FOLDER, '--latex-stdout'
+                '--prefix', PROJECT_FOLDER, '--latex-stdout',
+                '--data',  PROJECT_FOLDER + 'data'
             ], (logCatalog) => {
                 //corrige.pdf for all series
                 amcCommande(null, PROJECT_FOLDER, project, 'generating answers pdf', [
@@ -1175,7 +1184,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
 app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
     var zip = archiver('zip');
     res.on('close', function() {
-        return res.sendStatus(200).end();
+        return res.end();
     });
     res.attachment(req.params.project + '.zip');
     zip.pipe(res);
@@ -1270,7 +1279,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
                     params.push('--multiple');
                 }
                 amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
-                    redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime());
+                    redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime().toString());
                     res.json({
                         logImages: logImages,
                         logAnalyse: logAnalyse
@@ -1374,7 +1383,7 @@ app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
         db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
             query = 'UPDATE capture_zone SET manual=-1 WHERE student=$student AND page=$page AND copy=$copy';
             db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
-                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
+                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime().toString());
                 res.sendStatus(200);
             });
         });
@@ -1388,7 +1397,7 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
         db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy}, () => {
             query = 'UPDATE capture_zone SET manual=$manual WHERE student=$student AND page=$page AND copy=$copy AND type=$type AND id_a=$id_a AND id_b=$id_b';
             db('run', query, {$student: req.body.student, $page: req.body.page, $copy: req.body.copy, $manual: req.body.manual, $type: req.body.type, $id_a: req.body.id_a, $id_b: req.body.id_b}, () => {
-                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
+                redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime().toString());
                 res.sendStatus(200);
             });
         });
@@ -1434,7 +1443,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                 {$student: req.body.student, $copy: req.body.copy}, () => {
                                     db('run', 'DELETE FROM association_association WHERE student=$student AND copy=$copy',
                                     {$student: req.body.student, $copy: req.body.copy}, () => {
-                                        redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime());
+                                        redisClient.hset('project:' + req.params.project + ':status', 'scanned', new Date().getTime().toString());
                                         res.sendStatus(200);
                                     });
                                 });
@@ -1489,7 +1498,7 @@ app.get('/project/:project/scoring', aclProject, (req, res) => {
 
 app.post('/project/:project/csv', aclProject, (req, res) => {
     var filename = path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv');
-    fs.writeFile(filename, req.body, function(err, data) {
+    fs.writeFile(filename, req.body, function(err) {
         if (err) {
             res.sendStatus(500).end();
             return;
@@ -1557,7 +1566,7 @@ function calculateMarks(project, callback){
         amcCommande(null, PROJECT_FOLDER, project, 'calculating marks', [
             'note', '--data', PROJECT_FOLDER + 'data', '--seuil', threshold, '--progression-id', 'notation', '--progression', '1'
             ], (log) => {
-                redisClient.hset('project:' + project + ':status', 'marked', new Date().getTime());
+                redisClient.hset('project:' + project + ':status', 'marked', new Date().getTime().toString());
                 if (callback) {
                     callback(log);
                 }
@@ -1695,7 +1704,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
 app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
     var zip = archiver('zip');
     res.on('close', function() {
-        return res.sendStatus(200).end();
+        return res.end();
     });
     res.attachment(req.params.project + '_annotate.zip');
     zip.pipe(res);
@@ -1816,7 +1825,7 @@ app.use(<express, ErrorRequestHandler>(err, req, res, next) => {
     }
 });
 
-app.use(raven.middleware.express.errorHandler(process.env.SENTRY_DSN));
+app.use(Sentry.Handlers.errorHandler());
 
 if (env === 'development') {
     app.use(errorHandler({log: true}));
