@@ -439,6 +439,10 @@ function countStudentsCSV(project, callback): void {
 }
 
 function countGitCommits(project, callback): void {
+    if(!fs.existsSync(PROJECTS_FOLDER + '/' + project + '/.git')) {
+        callback(-1);
+        return;
+    }
     const g = git(PROJECTS_FOLDER + '/' + project);
     g._run(['rev-list', '--count', 'master'], (err, data) => {
         if (err) {
@@ -1961,18 +1965,20 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
             },
             () => {
                 query =
-                    'UPDATE capture_zone SET manual=$manual WHERE student=$student AND page=$page AND copy=$copy AND type=$type AND id_a=$idA AND id_b=$idA';
+                    'UPDATE capture_zone SET manual=$manual WHERE student=$student AND page=$page AND copy=$copy AND type=$type AND id_a=$id_a AND id_b=$id_b';
                 db(
                     'run',
                     query,
                     {
+                        $manual: req.body.manual,
                         $student: req.body.student,
                         $page: req.body.page,
                         $copy: req.body.copy,
-                        $manual: req.body.manual,
                         $type: req.body.type,
-                        $idA: req.body.id_a,
-                        $idB: req.body.id_b
+                        // eslint-disable-next-line @typescript-eslint/camelcase
+                        $id_a: req.body.id_a,
+                        // eslint-disable-next-line @typescript-eslint/camelcase
+                        $id_b: req.body.id_b
                     },
                     () => {
                         redisClient.hset(
