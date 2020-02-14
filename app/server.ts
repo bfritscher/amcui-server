@@ -1266,17 +1266,24 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
     fs.unlinkSync(req.files.file.path);
     tmp.file((err, path, fd, cleanup) => {
         fs.writeFileSync(path, 'scans/' + req.files.file.name);
-        //need to call getimage with file to get path of extracted files...
+        // need to call getimage with file to get path of extracted files...
         amcCommande(res, PROJECT_FOLDER, project, 'extracting images', [
             'getimages', '--progression-id', 'getimages', '--progression', '1', '--vector-density', '250', '--orientation', 'portrait', '--list', path
         ], (logImages) => {
             projectOptions( req.params.project, (err, result) => {
                 var params = [
                     'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
-                    '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
+                    '--projet', PROJECT_FOLDER, '--data', PROJECT_FOLDER + 'data', '--liste-fichiers',  path
                 ];
                 if (result.projetAMC.auto_capture_mode === '1') {
                     params.push('--multiple');
+                    // In multiple mode we must process one file after another in the order we receive them in order to not get mixups
+                    // force AMC:Queue to 1 process
+                    params.push('--n-procs');
+                    params.push('1');
+                } else {
+                    params.push('--n-procs');
+                    params.push('0');
                 }
                 amcCommande(res, PROJECT_FOLDER, project, 'analysing image', params, (logAnalyse) => {
                     redisClient.hset('project:' + project + ':status', 'scanned', new Date().getTime().toString());
