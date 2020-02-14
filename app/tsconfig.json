@@ -4,5 +4,8 @@
   "inlineSources": true,
   "sourceRoot": "/",
   "outDir": "../dist",
+  "noUnusedLocals": true,
+  "noUnusedParameters": true,
+  "strict": false
   }
 }
