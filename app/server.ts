@@ -331,8 +331,8 @@ function projectOptions(project: string, callback: (err, res) => void): void {
 function projectThreshold(project: string, callback: (err, res) => void): void {
     projectOptions(project, (_err, result) => {
         let threshold = 0.5;
-        if (result.projetAMC.seuil && !isNaN(result.projetAMC.seuil)) {
-            threshold = parseFloat(result.projetAMC.seuil);
+        if (result.projet.seuil && !isNaN(result.projet.seuil)) {
+            threshold = parseFloat(result.projet.seuil);
         }
         callback(null, threshold);
     });
@@ -932,7 +932,7 @@ app.get('/project/:project/options', aclProject, (req, res) => {
                 'project:' + req.params.project + ':status',
                 (_err3, status) => {
                     res.json({
-                        options: result ? result.projetAMC : {},
+                        options: result ? result.projet : {},
                         users: users,
                         status: status
                     });
@@ -948,7 +948,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
         req.params.project + '/options.xml'
     );
     const builder = new xml2js.Builder();
-    const xml = builder.buildObject({projetAMC: req.body.options});
+    const xml = builder.buildObject({projet: req.body.options});
     fs.writeFile(filename, xml, function(err) {
         if (err) {
             res.sendStatus(500);
@@ -1473,7 +1473,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                         '--mode',
                         's[c]',
                         '--n-copies',
-                        result.projetAMC.nombre_copies,
+                        result.projet.nombre_copies,
                         'source.tex',
                         '--prefix',
                         PROJECT_FOLDER,
@@ -1497,7 +1497,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                 '--mode',
                                 'k',
                                 '--n-copies',
-                                result.projetAMC.nombre_copies,
+                                result.projet.nombre_copies,
                                 'source.tex',
                                 '--prefix',
                                 PROJECT_FOLDER,
@@ -1515,7 +1515,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                         '--mode',
                                         'b',
                                         '--n-copies',
-                                        result.projetAMC.nombre_copies,
+                                        result.projet.nombre_copies,
                                         'source.tex',
                                         '--prefix',
                                         PROJECT_FOLDER,
@@ -1560,7 +1560,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                     '1'
                                                 ];
                                                 if (
-                                                    result.projetAMC.split ===
+                                                    result.projet.split ===
                                                     '1'
                                                 ) {
                                                     params.push('--split');
@@ -1742,6 +1742,8 @@ app.post(
                     '250',
                     '--orientation',
                     'portrait',
+                    '--copy-to', // using copy-to to generate correct absolute url (needed for creating correct %PROJECT in DB)
+                    PROJECT_FOLDER + 'scans',
                     '--list',
                     path
                 ],
@@ -1761,12 +1763,14 @@ app.post(
                             '1',
                             '--projet',
                             PROJECT_FOLDER,
+                            '--cr',
+                            PROJECT_FOLDER + 'cr',
                             '--data',
                             PROJECT_FOLDER + 'data',
                             '--liste-fichiers',
-                            path
+                            path,
                         ];
-                        if (result.projetAMC.auto_capture_mode === '1') {
+                        if (result.projet.auto_capture_mode === '1') {
                             params.push('--multiple');
                             // In multiple mode we must process one file after another in the order we receive them in order to not get mixups
                             // force AMC:Queue to 1 process
@@ -2192,7 +2196,7 @@ app.get('/project/:project/scoring', aclProject, (req, res) => {
                 '--mode',
                 'b',
                 '--n-copies',
-                result.projetAMC.nombre_copies,
+                result.projet.nombre_copies,
                 'source.tex',
                 '--prefix',
                 PROJECT_FOLDER,
@@ -2465,55 +2469,82 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
 
                     const symbols =
                         '0-0:' +
-                        result.projetAMC.symbole_0_0_type +
+                        result.projet.symbole_0_0_type +
                         '/' +
-                        result.projetAMC.symbole_0_0_color +
+                        result.projet.symbole_0_0_color +
                         ',0-1:' +
-                        result.projetAMC.symbole_0_1_type +
+                        result.projet.symbole_0_1_type +
                         '/' +
-                        result.projetAMC.symbole_0_1_color +
+                        result.projet.symbole_0_1_color +
                         ',1-0:' +
-                        result.projetAMC.symbole_1_0_type +
+                        result.projet.symbole_1_0_type +
                         '/' +
-                        result.projetAMC.symbole_1_0_color +
+                        result.projet.symbole_1_0_color +
                         ',1-1:' +
-                        result.projetAMC.symbole_1_1_type +
+                        result.projet.symbole_1_1_type +
                         '/' +
-                        result.projetAMC.symbole_1_1_color;
-
-                    let params = [
-                        'annote',
+                        result.projet.symbole_1_1_color;
+                    // https://gitlab.com/jojo_boulix/auto-multiple-choice/-/blob/master/AMC-gui.pl.in
+                    const params = [
+                        'annotate',
                         '--progression-id',
-                        'annote',
+                        'annotate',
                         '--progression',
                         '1',
                         '--cr',
                         PROJECTS_FOLDER + '/' + req.params.project + '/cr',
+                        '--project',
+                        PROJECTS_FOLDER + '/' + req.params.project,
+                        '--projects',
+                        PROJECTS_FOLDER,
                         '--data',
                         PROJECTS_FOLDER + '/' + req.params.project + '/data/',
-                        '--ch-sign',
-                        '2',
-                        '--taille-max',
-                        '1000x1500',
-                        '--qualite',
-                        '100',
+                        '--subject',
+                        PROJECTS_FOLDER +
+                            '/' +
+                            req.params.project +
+                            '/sujet.pdf',
+                        '--filename-model',
+                        result.projet.modele_regroupement || '(ID)',
+                        '--force-ascii', //TODO  try without but fix url
+                        '--sort',
+                        result.projet.export_sort  || 'l',
                         '--line-width',
                         '2',
+                        '--font-name',
+                        'Linux Libertine O 12',
                         '--symbols',
                         symbols,
+                        '--no-indicatives', // symboles_indicatives
                         '--position',
-                        result.projetAMC.annote_position,
-                        '--pointsize-nl',
-                        '60',
+                        result.projet.annote_position,
+                        '--dist-to-box',
+                        '5.5', // TODO maybe as option
+                        '--n-digits',
+                        '2',
                         '--verdict',
-                        result.projetAMC.verdict,
+                        result.projet.verdict,
                         '--verdict-question',
-                        result.projetAMC.verdict_q,
-                        '--fich-noms',
+                        result.projet.verdict_q,
+                        'verdict-question-cancelled',
+                        result.projet.verdict_qc,
+                        '--names-file',
                         filename,
-                        '--no-changes-only',
-                        '--ecart-marge',
-                        result.projetAMC.annote_ecart_marge || '2'
+                        '--csv-build-name',
+                        '(nom|surname) (prenom|name)',
+                        '--no-rtl',
+                        '--changes-only', // test if it works or generates problems
+                        '0',
+                        '--embedded-max-size',
+                        '1000x1500',
+                        'embedded-jpeg-quality',
+                        '90',
+                        '--embedded-format',
+                        'jpeg',
+                        '--with',
+                        'pdflatex',
+                        '--filter',
+                        'latex'
                     ];
                     if (req.body.ids) {
                         req.body.ids.forEach((id) => {
@@ -2523,7 +2554,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         params.push(tmpFile);
                     } else {
                         // annotate all but clear folder first
-                        fs.emptyDir(
+                        fs.emptyDirSync(
                             PROJECTS_FOLDER +
                                 '/' +
                                 req.params.project +
@@ -2536,71 +2567,33 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         req.params.project,
                         'annotating pages',
                         params,
-                        () => {
-                            params = [
-                                'regroupe',
-                                '--no-compose',
-                                '--projet',
-                                PROJECTS_FOLDER + '/' + req.params.project,
-                                '--data',
-                                PROJECTS_FOLDER +
-                                    '/' +
-                                    req.params.project +
-                                    '/data',
-                                '--sujet',
-                                PROJECTS_FOLDER +
-                                    '/' +
-                                    req.params.project +
-                                    '/sujet.pdf',
-                                '--progression-id',
-                                'regroupe',
-                                '--progression',
-                                '1',
-                                '--modele',
-                                result.projetAMC.modele_regroupement || '(ID)',
-                                '--fich-noms',
-                                filename,
-                                '--register',
-                                '--no-rename'
-                            ];
-                            if (req.body.ids) {
-                                params.push('--id-file');
-                                params.push(tmpFile);
-                            }
-                            amcCommande(
-                                null,
-                                PROJECTS_FOLDER + '/' + req.params.project,
+                        (logAnnotate) => {
+                            console.log(logAnnotate) // TODO: why empty?
+                            cleanup();
+                            commitGit(
                                 req.params.project,
-                                'creating annotated pdf',
-                                params,
-                                (logRegroupe) => {
-                                    cleanup();
-                                    commitGit(
-                                        req.params.project,
-                                        req.user.username,
-                                        'annotate'
-                                    );
-                                    redisClient.hmset(
-                                        'project:' +
-                                            req.params.project +
-                                            ':status',
-                                        'locked',
-                                        0,
-                                        'annotated',
-                                        new Date().getTime()
-                                    );
-                                    const found = logRegroupe.match(
-                                        /(cr\/.*?\.pdf)/
-                                    );
-                                    ws.to(
-                                        req.params.project + '-notifications'
-                                    ).emit('annotate', {
-                                        action: 'end',
-                                        type: req.body.ids ? 'single' : 'all',
-                                        file: found ? found[1] : undefined
-                                    });
-                                }
+                                req.user.username,
+                                'annotate'
                             );
+                            redisClient.hmset(
+                                'project:' +
+                                    req.params.project +
+                                    ':status',
+                                'locked',
+                                0,
+                                'annotated',
+                                new Date().getTime()
+                            );
+                            const found = logAnnotate.match(
+                                /(cr\/.*?\.pdf)/
+                            );
+                            ws.to(
+                                req.params.project + '-notifications'
+                            ).emit('annotate', {
+                                action: 'end',
+                                type: req.body.ids ? 'single' : 'all',
+                                file: found ? found[1] : undefined
+                            });
                         }
                     );
                 });
