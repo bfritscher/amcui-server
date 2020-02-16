@@ -43,7 +43,7 @@ Regards.</email_text>
   <moteur_latex_b>pdflatex</moteur_latex_b>
   <nom_examen></nom_examen>
   <nombre_copies>0</nombre_copies>
-  <note_arrondi>inf</note_arrondi>
+  <note_arrondi>normal</note_arrondi>
   <note_grain>0.1</note_grain>
   <note_max>6</note_max>
   <note_max_plafond>1</note_max_plafond>
@@ -60,9 +60,8 @@ Regards.</email_text>
   <seuil>0.55</seuil>
   <seuil_up>1</seuil_up>
   <texsrc>source.tex</texsrc>
-  <verdict>.
-        %(ID)
-        Mark: %s/%m (total score: %S/%M)</verdict>
+  <verdict>%(ID)
+Mark: %(FinalGrade)/%m (total score: %S/%M)</verdict>
   <verdict_q>&quot;%s/%m&quot;</verdict_q>
   <verdict_qc>&quot;X&quot;</verdict_qc>
   <symbole_0_0_color>#000000000000</symbole_0_0_color>

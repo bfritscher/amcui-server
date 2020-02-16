@@ -353,7 +353,6 @@ function amcCommande(
         action: 'start',
         params: params
     });
-    console.log(params);
     const amc = childProcess.spawn('auto-multiple-choice', params, {
         cwd: cwd
     });
@@ -2523,14 +2522,18 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         '--line-width',
                         '2',
                         '--font-name',
-                        'Linux Libertine O 12',
+                        'Lato Regular 12',
                         '--symbols',
                         symbols,
                         '--no-indicatives', // symboles_indicatives
                         '--position',
                         result.projet.annote_position,
-                        '--dist-to-box',
-                        '5.5', // TODO maybe as option
+                        '--dist-to-box', // used for position = case
+                        '1cm', // TODO maybe as option
+                        '--dist-margin',
+                        '1cm',
+                        '--dist-margin-global',
+                        '1cm',
                         '--n-digits',
                         '2',
                         '--verdict',
@@ -2578,8 +2581,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         req.params.project,
                         'annotating pages',
                         params,
-                        (logAnnotate) => {
-                            console.log(logAnnotate) // TODO: why empty?
+                        () => {
                             cleanup();
                             commitGit(
                                 req.params.project,
@@ -2595,16 +2597,45 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                                 'annotated',
                                 new Date().getTime()
                             );
-                            const found = logAnnotate.match(
-                                /(cr\/.*?\.pdf)/
-                            );
-                            ws.to(
-                                req.params.project + '-notifications'
-                            ).emit('annotate', {
-                                action: 'end',
-                                type: req.body.ids ? 'single' : 'all',
-                                file: found ? found[1] : undefined
-                            });
+
+                            function respond(filename): void {
+                                ws.to(
+                                    req.params.project + '-notifications'
+                                ).emit('annotate', {
+                                    action: 'end',
+                                    type: req.body.ids ? 'single' : 'all',
+                                    file: filename
+                                });
+                            }
+
+                            function databaseReport(project, student, copy, callback): void {
+                                const db = new sqlite3.Database(
+                                    PROJECTS_FOLDER + '/' + project + '/data/report.sqlite',
+                                    (err) => {
+                                        if (err) {
+                                            callback(undefined);
+                                        }
+                                        db.all(
+                                            'SELECT file FROM report_student WHERE student=$student AND copy=$copy',
+                                            {$student: student, $copy: copy},(_err, rows) => {
+                                                let filename = undefined;
+                                                if(rows && rows.length > 0) {
+                                                    filename = 'cr/corrections/pdf/' + rows[0].file;
+                                                }
+                                                callback(filename);
+                                        });
+                                    }
+                                );
+                            }
+
+                            if (req.body.ids) {
+                                req.body.ids.forEach((id) => {
+                                    const [student, copy] = id.split(':');
+                                    databaseReport(req.params.project, student, copy, respond);
+                                })
+                            } else {
+                                respond(undefined);
+                            }
                         }
                     );
                 });
