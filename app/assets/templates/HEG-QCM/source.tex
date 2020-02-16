@@ -203,8 +203,13 @@
     \begin{multicols}{2}
     \setlength{\parindent}{0pt}
     \formulaire
+    %Sur deux colonnes, les cases réponses sont affichées
+    %à l'exception des questions ouvertes.
+    %%% \AMCformFilter{!\AMCifcategory{open}}
     \end{multicols}
 
+    %Toutes les questions ouvertes sont affichées.
+    %%% \AMCformFilter{\AMCifcategory{open}}
 
     \vspace{20ex}
 
