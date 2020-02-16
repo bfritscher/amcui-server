@@ -2342,6 +2342,8 @@ function calculateMarks(project, callback): void {
                     result.project.note_arrondi,
                     '--notemin',
                     result.project.note_min,
+                    '--notenull',
+                    result.project.note_null,
                     '--notemax',
                     result.project.note_max,
                     '--plafond',
