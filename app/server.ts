@@ -323,7 +323,14 @@ function projectOptions(project: string, callback: (err, res) => void): void {
         if (err) {
             callback(err, null);
         } else {
-            xml2js.parseString(data, {explicitArray: false}, callback);
+            xml2js.parseString(data, {explicitArray: false}, (err, result) => {
+                // auto-upgrade old options files
+                if (result.projetAMC) {
+                    result.project = result.projetAMC;
+                    delete result.projetAMC;
+                }
+                callback(err, result);
+            });
         }
     });
 }
@@ -331,8 +338,8 @@ function projectOptions(project: string, callback: (err, res) => void): void {
 function projectThreshold(project: string, callback: (err, res) => void): void {
     projectOptions(project, (_err, result) => {
         let threshold = 0.5;
-        if (result.projet.seuil && !isNaN(result.projet.seuil)) {
-            threshold = parseFloat(result.projet.seuil);
+        if (result.project.seuil && !isNaN(result.project.seuil)) {
+            threshold = parseFloat(result.project.seuil);
         }
         callback(null, threshold);
     });
@@ -931,7 +938,7 @@ app.get('/project/:project/options', aclProject, (req, res) => {
                 'project:' + req.params.project + ':status',
                 (_err3, status) => {
                     res.json({
-                        options: result ? result.projet : {},
+                        options: result ? result.project : {},
                         users: users,
                         status: status
                     });
@@ -947,7 +954,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
         req.params.project + '/options.xml'
     );
     const builder = new xml2js.Builder();
-    const xml = builder.buildObject({projet: req.body.options});
+    const xml = builder.buildObject({project: req.body.options});
     fs.writeFile(filename, xml, function(err) {
         if (err) {
             res.sendStatus(500);
@@ -1472,7 +1479,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                         '--mode',
                         's[c]',
                         '--n-copies',
-                        result.projet.nombre_copies,
+                        result.project.nombre_copies,
                         'source.tex',
                         '--prefix',
                         PROJECT_FOLDER,
@@ -1496,7 +1503,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                 '--mode',
                                 'k',
                                 '--n-copies',
-                                result.projet.nombre_copies,
+                                result.project.nombre_copies,
                                 'source.tex',
                                 '--prefix',
                                 PROJECT_FOLDER,
@@ -1514,7 +1521,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                         '--mode',
                                         'b',
                                         '--n-copies',
-                                        result.projet.nombre_copies,
+                                        result.project.nombre_copies,
                                         'source.tex',
                                         '--prefix',
                                         PROJECT_FOLDER,
@@ -1559,7 +1566,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                     '1'
                                                 ];
                                                 if (
-                                                    result.projet.split ===
+                                                    result.project.split ===
                                                     '1'
                                                 ) {
                                                     params.push('--split');
@@ -1769,7 +1776,7 @@ app.post(
                             '--liste-fichiers',
                             path,
                         ];
-                        if (result.projet.auto_capture_mode === '1') {
+                        if (result.project.auto_capture_mode === '1') {
                             params.push('--multiple');
                             // In multiple mode we must process one file after another in the order we receive them in order to not get mixups
                             // force AMC:Queue to 1 process
@@ -2195,7 +2202,7 @@ app.get('/project/:project/scoring', aclProject, (req, res) => {
                 '--mode',
                 'b',
                 '--n-copies',
-                result.projet.nombre_copies,
+                result.project.nombre_copies,
                 'source.tex',
                 '--prefix',
                 PROJECT_FOLDER,
@@ -2330,13 +2337,13 @@ function calculateMarks(project, callback): void {
                     '--seuil',
                     threshold,
                     '--grain',
-                    result.projet.note_grain,
+                    result.project.note_grain,
                     '--arrondi',
-                    result.projet.note_arrondi,
+                    result.project.note_arrondi,
                     '--notemin',
-                    result.projet.note_min,
+                    result.project.note_min,
                     '--notemax',
-                    result.projet.note_max,
+                    result.project.note_max,
                     '--plafond',
                     '--progression-id',
                     'notation',
@@ -2479,21 +2486,21 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
 
                     const symbols =
                         '0-0:' +
-                        result.projet.symbole_0_0_type +
+                        result.project.symbole_0_0_type +
                         '/' +
-                        result.projet.symbole_0_0_color +
+                        result.project.symbole_0_0_color +
                         ',0-1:' +
-                        result.projet.symbole_0_1_type +
+                        result.project.symbole_0_1_type +
                         '/' +
-                        result.projet.symbole_0_1_color +
+                        result.project.symbole_0_1_color +
                         ',1-0:' +
-                        result.projet.symbole_1_0_type +
+                        result.project.symbole_1_0_type +
                         '/' +
-                        result.projet.symbole_1_0_color +
+                        result.project.symbole_1_0_color +
                         ',1-1:' +
-                        result.projet.symbole_1_1_type +
+                        result.project.symbole_1_1_type +
                         '/' +
-                        result.projet.symbole_1_1_color;
+                        result.project.symbole_1_1_color;
                     // https://gitlab.com/jojo_boulix/auto-multiple-choice/-/blob/master/AMC-gui.pl.in
                     const params = [
                         'annotate',
@@ -2515,10 +2522,10 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                             req.params.project +
                             '/sujet.pdf',
                         '--filename-model',
-                        result.projet.modele_regroupement || '(ID)',
+                        result.project.modele_regroupement || '(ID)',
                         '--force-ascii', //TODO  try without but fix url
                         '--sort',
-                        result.projet.export_sort  || 'l',
+                        result.project.export_sort  || 'l',
                         '--line-width',
                         '2',
                         '--font-name',
@@ -2527,7 +2534,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         symbols,
                         '--no-indicatives', // symboles_indicatives
                         '--position',
-                        result.projet.annote_position,
+                        result.project.annote_position,
                         '--dist-to-box', // used for position = case
                         '1cm', // TODO maybe as option
                         '--dist-margin',
@@ -2537,11 +2544,11 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         '--n-digits',
                         '2',
                         '--verdict',
-                        result.projet.verdict,
+                        result.project.verdict,
                         '--verdict-question',
-                        result.projet.verdict_q,
+                        result.project.verdict_q,
                         'verdict-question-cancelled',
-                        result.projet.verdict_qc,
+                        result.project.verdict_qc,
                         '--names-file',
                         filename,
                         '--csv-build-name',

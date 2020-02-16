@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<projet>
+<project>
   <after_export>file</after_export>
   <allocate_ids>0</allocate_ids>
   <annote_position>marges</annote_position>
@@ -72,4 +72,4 @@ Mark: %(FinalGrade)/%m (total score: %S/%M)</verdict>
   <symbole_1_0_type>circle</symbole_1_0_type>
   <symbole_1_1_color>#00ff00</symbole_1_1_color>
   <symbole_1_1_type>circle</symbole_1_1_type>
-</projet>
+</project>
