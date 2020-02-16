@@ -2627,6 +2627,7 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
     zip.file(APP_FOLDER + '/assets/extractFirstPage.bat', {
         name: 'extractFirstPage.bat.txt'
     });
+    zip.file(APP_FOLDER + '/assets/print.bat', {name: 'print.bat.txt'});
     zip.finalize();
 });
 /*
