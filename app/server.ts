@@ -2317,34 +2317,45 @@ app.get('/project/:project/names', aclProject, (req, res) => {
 
 function calculateMarks(project, callback): void {
     const PROJECT_FOLDER = PROJECTS_FOLDER + '/' + project + '/';
-    projectThreshold(project, (_err, threshold) => {
-        amcCommande(
-            null,
-            PROJECT_FOLDER,
-            project,
-            'calculating marks',
-            [
-                'note',
-                '--data',
-                PROJECT_FOLDER + 'data',
-                '--seuil',
-                threshold,
-                '--progression-id',
-                'notation',
-                '--progression',
-                '1'
-            ],
-            (log) => {
-                redisClient.hset(
-                    'project:' + project + ':status',
-                    'marked',
-                    new Date().getTime().toString()
-                );
-                if (callback) {
-                    callback(log);
+    projectOptions(project, (_err, result) => {
+        projectThreshold(project, (_err2, threshold) => {
+            amcCommande(
+                null,
+                PROJECT_FOLDER,
+                project,
+                'calculating marks',
+                [
+                    'note',
+                    '--data',
+                    PROJECT_FOLDER + 'data',
+                    '--seuil',
+                    threshold,
+                    '--grain',
+                    result.projet.note_grain,
+                    '--arrondi',
+                    result.projet.note_arrondi,
+                    '--notemin',
+                    result.projet.note_min,
+                    '--notemax',
+                    result.projet.note_max,
+                    '--plafond',
+                    '--progression-id',
+                    'notation',
+                    '--progression',
+                    '1'
+                ],
+                (log) => {
+                    redisClient.hset(
+                        'project:' + project + ':status',
+                        'marked',
+                        new Date().getTime().toString()
+                    );
+                    if (callback) {
+                        callback(log);
+                    }
                 }
-            }
-        );
+            );
+        });
     });
 }
 
