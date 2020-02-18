@@ -72,4 +72,5 @@ Mark: %(FinalGrade)/%m (total score: %S/%M)</verdict>
   <symbole_1_0_type>circle</symbole_1_0_type>
   <symbole_1_1_color>#00ff00</symbole_1_1_color>
   <symbole_1_1_type>circle</symbole_1_1_type>
+  <native_preview>1</native_preview>
 </project>
