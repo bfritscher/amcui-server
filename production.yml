@@ -1,19 +1,22 @@
-redis:
-  image: redis:3
-  restart: always
-  volumes:
-    - ./data:/data
-    - ./redis.conf:/usr/local/etc/redis/redis.conf
-  command: redis-server /usr/local/etc/redis/redis.conf
-amcuiserver:
-  build: .
-  env_file: .env
-  working_dir: /amc
-  restart: always
-  volumes:
-    - ./dist/public:/amc/dist/public
-    - ./projects:/amc/projects
-  ports:
-    - "127.0.0.1:9002:9001"
-  links:
-    - redis:redis
+version: "3"
+
+services:
+  redis:
+    image: redis
+    restart: always
+    volumes:
+      - ./data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+  amcuiserver:
+    build: .
+    env_file: .env
+    working_dir: /amc
+    restart: always
+    volumes:
+      - ./dist/public:/amc/dist/public
+      - ./projects:/amc/projects
+    ports:
+      - "127.0.0.1:9002:9001"
+    depends_on:
+      - redis

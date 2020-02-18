@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<projetAMC>
-  <_modifie>1</_modifie>
-  <_modifie_ok>0</_modifie_ok>
+<project>
   <after_export>file</after_export>
   <allocate_ids>0</allocate_ids>
   <annote_position>marges</annote_position>
   <annote_rtl></annote_rtl>
-  <annote_ecart_marge>4</annote_ecart_marge>
   <assoc_code></assoc_code>
   <auto_capture_mode>-1</auto_capture_mode>
   <code_examen></code_examen>
   <cr>cr</cr>
   <data>data</data>
   <doc_catalog>catalog.pdf</doc_catalog>
+  <doc_indiv_solution>indiv-solution.pdf</doc_indiv_solution>
   <doc_question>sujet.pdf</doc_question>
   <doc_setting>calage.xy</doc_setting>
   <doc_solution>corrige.pdf</doc_solution>
@@ -20,6 +18,7 @@
   <email_subject>Exam result</email_subject>
   <email_text>Please find enclosed your annotated completed answer sheet.
 Regards.</email_text>
+  <email_use_html></email_use_html>
   <encodage_csv>UTF-8</encodage_csv>
   <encodage_liste>UTF-8</encodage_liste>
   <export_csv_columns>student.copy,student.key,student.name</export_csv_columns>
@@ -28,11 +27,12 @@ Regards.</email_text>
   <export_include_abs></export_include_abs>
   <export_ncols>2</export_ncols>
   <export_ods_columns>student.copy,student.key,student.name</export_ods_columns>
-  <export_ods_groupsums></export_ods_groupsums>
+  <export_ods_group>0</export_ods_group>
+  <export_ods_groupsep>.</export_ods_groupsep>
   <export_ods_stats></export_ods_stats>
   <export_ods_statsindic>1</export_ods_statsindic>
   <export_pagesize>a4</export_pagesize>
-  <export_sort>n</export_sort>
+  <export_sort>l</export_sort>
   <filter>latex</filter>
   <filtered_source>filtered.tex</filtered_source>
   <format_export>CSV</format_export>
@@ -43,23 +43,27 @@ Regards.</email_text>
   <moteur_latex_b>pdflatex</moteur_latex_b>
   <nom_examen></nom_examen>
   <nombre_copies>0</nombre_copies>
-  <note_arrondi>inf</note_arrondi>
+  <note_arrondi>normal</note_arrondi>
   <note_grain>0.1</note_grain>
   <note_max>6</note_max>
   <note_max_plafond>1</note_max_plafond>
   <note_min>1</note_min>
+  <note_null>1</note_null>
   <notes>notes.xml</notes>
+  <pdfform>0</pdfform>
   <postcorrect_copy>0</postcorrect_copy>
+  <postcorrect_set_multiple></postcorrect_set_multiple>
   <postcorrect_student>0</postcorrect_student>
-  <regroupement_compose></regroupement_compose>
+  <regroupement_compose>0</regroupement_compose>
   <regroupement_copies>ALL</regroupement_copies>
   <regroupement_type>STUDENTS</regroupement_type>
   <seuil>0.55</seuil>
+  <seuil_up>1</seuil_up>
   <texsrc>source.tex</texsrc>
-  <verdict>.
-        %(ID)
-        Mark: %s/%m (total score: %S/%M)</verdict>
+  <verdict>%(ID)
+Mark: %(FinalGrade)/%m (total score: %S/%M)</verdict>
   <verdict_q>&quot;%s/%m&quot;</verdict_q>
+  <verdict_qc>&quot;X&quot;</verdict_qc>
   <symbole_0_0_color>#000000000000</symbole_0_0_color>
   <symbole_0_0_type>none</symbole_0_0_type>
   <symbole_0_1_color>#ff0000</symbole_0_1_color>
@@ -68,4 +72,5 @@ Regards.</email_text>
   <symbole_1_0_type>circle</symbole_1_0_type>
   <symbole_1_1_color>#00ff00</symbole_1_1_color>
   <symbole_1_1_type>circle</symbole_1_1_type>
-</projetAMC>
+  <native_preview>1</native_preview>
+</project>
