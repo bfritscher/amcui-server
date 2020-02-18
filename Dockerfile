@@ -13,4 +13,4 @@ RUN npm install
 VOLUME ["/amc/projects"]
 
 # Define default command.
-CMD ["supervisor", "--watch", "/amc/dist", "dist/server.js"]
+CMD ["node", "dist/server.js"]
