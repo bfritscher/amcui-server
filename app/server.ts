@@ -1264,7 +1264,7 @@ app.post('/project/:project/upload', aclProject, multipartMiddleware, (req: mult
             projectOptions( req.params.project, (err, result) => {
                 var params = [
                     'analyse', '--tol-marque', '0.2,0.2', '--prop', '0.8', '--bw-threshold', '0.6', '--progression-id', 'analyse', '--progression', '1',
-                    '--n-procs', '0', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
+                    '--n-procs', '1', '--projet', PROJECT_FOLDER, '--liste-fichiers',  path
                 ];
                 if (result.projetAMC.auto_capture_mode === '1') {
                     params.push('--multiple');
