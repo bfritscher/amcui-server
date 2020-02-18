@@ -2639,7 +2639,11 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
 
                             if (req.body.ids) {
                                 req.body.ids.forEach((id) => {
-                                    const [student, copy] = id.split(':');
+                                    let student = id
+                                    let copy = 0
+                                    if (isNaN(id)) {
+                                        [student, copy] = id.split(':');
+                                    }
                                     databaseReport(req.params.project, student, copy, respond);
                                 })
                             } else {
