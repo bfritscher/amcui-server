@@ -9,6 +9,7 @@ RUN mkdir -p /amc
 COPY . /amc/
 WORKDIR /amc
 RUN npm install
+RUN npm run build
 
 VOLUME ["/amc/projects"]
 

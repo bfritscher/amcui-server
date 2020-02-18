@@ -32,7 +32,7 @@
   },
   "main": "./dist/server.js",
   "scripts": {
-    "postinstall": "tsc -p ./app",
+    "build": "tsc -p ./app",
     "watch": "tsc -w -p ./app",
     "debug": "nodemon --legacy-watch --watch ./dist --inspect=0.0.0.0:5858 --nolazy ./dist/server.js",
     "start": "node ./dist/server.js"
