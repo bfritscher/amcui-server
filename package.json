@@ -68,7 +68,7 @@
     "redis": "3.0.2",
     "simple-git": "1.131.0",
     "slug": "2.1.1",
-    "socket.io": "2.3.0",
+    "socket.io": "2.4.0",
     "socketio-jwt": "4.5.0",
     "sqlite3": "4.1.1",
     "stream-splitter": "0.3.2",
