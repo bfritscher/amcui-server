@@ -3,17 +3,6 @@
     export = isOnline;
 }
 
-declare module "connect-multiparty" {
-    import express = require("express");
-    module multiparty {
-        interface Request extends express.Request {
-            files:any;
-        }
-    }
-    function multiparty(): express.RequestHandler;
-    export = multiparty;
-}
-
 declare module "diffsync" {
     export var InMemoryDataAdapter:{
         new():any;
@@ -29,7 +18,7 @@ declare module "stream-splitter" {
 }
 
 declare module "image-size" {
-    function sizeOf(uri:string, callback:(err, any) => void):any;
+    function sizeOf(uri:string, callback:(err:Error|null, dimensions:any) => void):any;
     export = sizeOf;
 }
 

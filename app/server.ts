@@ -1,35 +1,33 @@
-/* eslint-disable no-prototype-builtins */
 require('dotenv').config();
-import fs = require('fs-extra');
-import StreamSplitter = require('stream-splitter');
-import cors = require('cors');
-import express = require('express');
-import io = require('socket.io');
-import bodyParser = require('body-parser');
-import errorHandler = require('errorhandler');
-import sqlite3 = require('sqlite3');
-import path = require('path');
-import jwt = require('jsonwebtoken');
-import socketioJwt = require('socketio-jwt');
-import expressJwt = require('express-jwt');
-import bcrypt = require('bcrypt');
-import redis = require('redis');
-import xml2js = require('xml2js');
-import mkdirp = require('mkdirp');
-import Acl = require('acl');
-import multiparty = require('connect-multiparty');
-import tmp = require('tmp');
-import childProcess = require('child_process');
-import git = require('simple-git');
-import u2f = require('u2f');
+import fs from 'fs-extra';
+import StreamSplitter from 'stream-splitter';
+import cors from 'cors';
+import {createServer} from 'http';
+import express from 'express';
+import {Server} from 'socket.io';
+import errorHandler from 'errorhandler';
+import sqlite3 from 'sqlite3';
+import path from 'path';
+import jwt from 'jsonwebtoken';
+import {authorize} from '@thream/socketio-jwt';
+import expressJwt from 'express-jwt';
+import bcrypt from 'bcrypt';
+import redis from 'redis';
+import xml2js from 'xml2js';
+import mkdirp from 'mkdirp';
+import ACL from 'acl2';
+import multer from "multer";
+import tmp from 'tmp';
+import childProcess from 'child_process';
+import git from 'simple-git';
+import u2f from 'u2f';
+import archiver from 'archiver';
+import slug from 'slug';
+import sizeOf from 'image-size';
+import diffSync from 'diffsync';
+import redisDataAdapter from './diffsyncredis';
 
-import archiver = require('archiver');
-import slug = require('slug');
 slug.defaults.mode = 'rfc3986';
-
-import sizeOf = require('image-size');
-import diffSync = require('diffsync');
-import redisDataAdapter = require('./diffsyncredis');
 
 // This allows TypeScript to detect our global value
 declare global {
@@ -41,9 +39,8 @@ declare global {
     }
     // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
-        export interface Request {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            user: any;
+        interface User {
+            username: string;
         }
     }
 }
@@ -58,32 +55,26 @@ if (process.env.SENTRY_DSN) {
         dsn: process.env.SENTRY_DSN,
         integrations: [
             new RewriteFrames({
-                root: global.__rootdir__
-            })
-        ]
+                root: global.__rootdir__,
+            }),
+        ],
     });
 }
 
-const multipartMiddleware = multiparty();
+
 
 const APP_FOLDER = path.resolve(__dirname, '../app/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 
 const redisClient = redis.createClient(6379, 'redis', {});
-redisClient.on('error', function(err) {
+redisClient.on('error', function (err) {
     console.log('Redis error ' + err);
     Sentry.captureException(err);
 });
-const acl = new Acl(
-    new Acl.redisBackend(redisClient, 'acl')
-    /*
-    , {debug: (txt) => {
-    console.log(JSON.stringify(txt));
-}}
-*/
-);
+const acl = new ACL(new ACL.redisBackend({redis: redisClient, prefix: 'acl'}));
 
-function addProjectAcl(project, username): void {
+function addProjectAcl(project: string, username: string | undefined): void {
+    if (!username) return;
     //role, resource, permission
     acl.allow(project, '/project/' + project, 'admin');
     //user, role
@@ -92,22 +83,31 @@ function addProjectAcl(project, username): void {
 
 const app = express();
 app.use(Sentry.Handlers.requestHandler());
-const server = require('http').Server(app);
-const ws = io(server);
+const httpServer = createServer(app);
+const ws = new Server(httpServer);
 
 ws.use(
-    socketioJwt.authorize({
-        secret: process.env.JWT_SECRET,
-        timeout: 15000, // 15 seconds to send the authentication message
-        decodedPropertyName: 'decoded_token',
-        handshake: true
+    authorize({
+        secret: process.env.JWT_SECRET || '',
     })
 );
 
-//in memory rooms users list
-const rooms = {};
+const uploadMiddleware = multer();
 
-function userSaveVisit(username, projectName): void {
+//in memory rooms users list
+interface SocketRef {
+    [key: string]: {
+        id: string;
+        username: string;
+    };
+}
+interface RoomsLookup {
+    [key: string]: SocketRef;
+}
+
+const rooms: RoomsLookup = {};
+
+function userSaveVisit(username: string, projectName: string): void {
     redisClient.zadd(
         'user:' + username + ':recent',
         new Date().getTime(),
@@ -118,16 +118,15 @@ function userSaveVisit(username, projectName): void {
 
 ws.on('connection', (socket) => {
     //this socket is authenticated, we are good to handle more events from it.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const username = (socket as any).decoded_token.username;
-    socket.on('listen', (project) => {
+    const username: string = socket.decodedToken.username;
+    socket.on('listen', (project: string) => {
         acl.hasRole(username, project, (_err, hasRole) => {
             if (!hasRole) {
                 socket.disconnect(true);
             } else {
                 userSaveVisit(username, project);
                 socket.join(project + '-notifications');
-                socket.on('disconnect', function() {
+                socket.on('disconnect', function () {
                     delete rooms[project][socket.id];
                     ws.to(project + '-notifications').emit(
                         'user:disconnected',
@@ -142,7 +141,7 @@ ws.on('connection', (socket) => {
                 rooms[project][socket.id] = {id: socket.id, username: username};
                 ws.to(project + '-notifications').emit('user:connected', {
                     id: socket.id,
-                    username: username
+                    username: username,
                 });
             }
         });
@@ -188,18 +187,18 @@ app.use(
             'Accept-Ranges',
             'Content-Encoding',
             'Content-Length',
-            'Content-Range'
-        ]
+            'Content-Range',
+        ],
     })
 );
 
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(bodyParser.json({limit: '50mb'}));
-app.use(function(req, _res, next) {
+app.use(express.urlencoded({extended: true}));
+app.use(express.json({limit: '50mb'}));
+app.use(function (req, _res, next) {
     if (req.is('text/*')) {
         req.body = '';
         req.setEncoding('utf8');
-        req.on('data', function(chunk) {
+        req.on('data', function (chunk) {
             req.body += chunk;
         });
         req.on('end', next);
@@ -209,7 +208,8 @@ app.use(function(req, _res, next) {
 });
 
 const secure = expressJwt({
-    secret: process.env.JWT_SECRET,
+    secret: process.env.JWT_SECRET || '',
+    algorithms: ['HS256'],
     getToken: function fromHeaderOrQuerystring(req) {
         if (
             req.headers.authorization &&
@@ -220,7 +220,7 @@ const secure = expressJwt({
             return req.query.token;
         }
         return null;
-    }
+    },
 });
 //secure /project with auth api
 app.use('/project', secure);
@@ -229,21 +229,44 @@ app.use('/profile', secure);
 
 const aclProject: express.RequestHandler = acl.middleware(
     2,
-    (req: express.Request) => {
-        return req.user.username;
+    (req) => {
+        return (req as express.Request)?.user?.username as any;
     },
     'admin'
 );
 
 const aclAdmin: express.RequestHandler = acl.middleware(
     1,
-    (req: express.Request) => {
-        return req.user.username;
+    (req) => {
+        return (req as express.Request)?.user?.username as any;
     },
     'admin'
 );
 
-function database(req, res, callback): void {
+//TODO check types with db
+interface DbParams {
+    $threshold?: number;
+    $student?: string;
+    $page?: string;
+    $copy?: string;
+    $manual?: number;
+    $type?: string;
+    $id_a?: string;
+    $id_b?: string;
+}
+
+function database(
+    req: express.Request,
+    res: express.Response,
+    callback: (
+        dbReady: (
+            method: keyof sqlite3.Database,
+            query: string,
+            params: DbParams | ((rows: any[]) => void),
+            success?: (rows: any[] | any) => void
+        ) => void
+    ) => void
+): void {
     const project = req.params.project;
     const db = new sqlite3.Database(
         PROJECTS_FOLDER + '/' + project + '/data/capture.sqlite',
@@ -274,14 +297,16 @@ function database(req, res, callback): void {
                                     "/data/scoring.sqlite' AS scoring",
                                 () => {
                                     const dbHandled = (
-                                        method,
-                                        query,
-                                        params,
-                                        success
+                                        method: keyof sqlite3.Database,
+                                        query: string,
+                                        params:
+                                            | DbParams
+                                            | ((rows: any[]) => void),
+                                        success?: (rows: any[] | any) => void
                                     ): void => {
                                         const internalCallback = (
-                                            err,
-                                            rows
+                                            err: Error | null,
+                                            rows: any[]
                                         ): void => {
                                             if (err) {
                                                 res.status(500).end(
@@ -292,17 +317,23 @@ function database(req, res, callback): void {
                                             if (success) {
                                                 success(rows);
                                             } else {
-                                                params(rows);
+                                                if (
+                                                    typeof params === 'function'
+                                                ) {
+                                                    params(rows);
+                                                }
                                             }
                                         };
 
                                         if (success) {
+                                            // @ts-ignore
                                             db[method](
                                                 query,
                                                 params,
                                                 internalCallback
                                             );
                                         } else {
+                                            // @ts-ignore
                                             db[method](query, internalCallback);
                                         }
                                     };
@@ -317,9 +348,12 @@ function database(req, res, callback): void {
     );
 }
 
-function projectOptions(project: string, callback: (err, res) => void): void {
+function projectOptions(
+    project: string,
+    callback: (err: Error | null, result: any) => void
+): void {
     const filename = path.resolve(PROJECTS_FOLDER, project + '/options.xml');
-    fs.readFile(filename, 'utf-8', function(err, data) {
+    fs.readFile(filename, 'utf-8', function (err, data) {
         if (err) {
             callback(err, null);
         } else {
@@ -335,7 +369,10 @@ function projectOptions(project: string, callback: (err, res) => void): void {
     });
 }
 
-function projectThreshold(project: string, callback: (err, res) => void): void {
+function projectThreshold(
+    project: string,
+    callback: (err: Error | null, threshold: number) => void
+): void {
     projectOptions(project, (_err, result) => {
         let threshold = 0.5;
         if (result.project.seuil && !isNaN(result.project.seuil)) {
@@ -346,22 +383,22 @@ function projectThreshold(project: string, callback: (err, res) => void): void {
 }
 
 function amcCommande(
-    res,
-    cwd,
+    res: express.Response | null,
+    cwd: string,
     project: string,
     msg: string,
     params: string[],
-    callback,
-    error?
+    callback?: ((log: string) => void) | null,
+    error?: (() => void) | null
 ): void {
     ws.to(project + '-notifications').emit('log', {
         command: params[0],
         msg: msg,
         action: 'start',
-        params: params
+        params: params,
     });
     const amc = childProcess.spawn('auto-multiple-choice', params, {
-        cwd: cwd
+        cwd: cwd,
     });
 
     let log = '';
@@ -370,13 +407,13 @@ function amcCommande(
     //send complete lines
     const splitter = amc.stdout.pipe(StreamSplitter('\n'));
     splitter.encoding = 'utf8';
-    splitter.on('token', function(token) {
+    splitter.on('token', function (token: string) {
         log += token + '\n';
         ws.to(project + '-notifications').emit('log', {
             command: params[0],
             msg: msg,
             action: 'log',
-            data: token
+            data: token,
         });
     });
 
@@ -386,7 +423,7 @@ function amcCommande(
             command: params[0],
             msg: msg,
             action: 'err',
-            data: data.toString()
+            data: data.toString(),
         });
     });
     amc.on('close', (code) => {
@@ -394,7 +431,7 @@ function amcCommande(
             command: params[0],
             msg: msg,
             action: 'end',
-            code: code
+            code: code,
         });
         if (code === 0) {
             if (callback) {
@@ -409,7 +446,7 @@ function amcCommande(
                 log: log,
                 command: params,
                 errorlog: errorlog,
-                error: code
+                error: code,
             };
             if (res) {
                 res.json(debug);
@@ -422,10 +459,6 @@ app.get('/', (_req, res) => {
     res.send('AMCUI API SERVER');
 });
 
-app.get('/testerror', () => {
-    throw 'Error Test';
-});
-
 app.get('/debug-sentry', () => {
     throw new Error('Sentry express test');
 });
@@ -433,7 +466,10 @@ app.get('/debug-sentry', () => {
 acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
 
-function countStudentsCSV(project, callback): void {
+function countStudentsCSV(
+    project: string,
+    callback: (count: number) => void
+): void {
     const filename = path.resolve(PROJECTS_FOLDER, project + '/students.csv');
     fs.readFile(filename, (err, data) => {
         if (err) {
@@ -444,27 +480,33 @@ function countStudentsCSV(project, callback): void {
     });
 }
 
-function countGitCommits(project, callback): void {
-    if(!fs.existsSync(PROJECTS_FOLDER + '/' + project + '/.git')) {
+function countGitCommits(
+    project: string,
+    callback: (count: number) => void
+): void {
+    if (!fs.existsSync(PROJECTS_FOLDER + '/' + project + '/.git')) {
         callback(-1);
         return;
     }
     const g = git(PROJECTS_FOLDER + '/' + project);
-    g._run(['rev-list', '--count', 'master'], (err, data) => {
-        if (err) {
-            callback(-1);
-        } else {
-            callback(Number(data.trim()));
+    g._run(
+        ['rev-list', '--count', 'master'],
+        (err: Error | null, data: string) => {
+            if (err) {
+                callback(-1);
+            } else {
+                callback(Number(data.trim()));
+            }
         }
-    });
+    );
 }
 
 app.get('/admin/stats', aclAdmin, (_req, res) => {
-    const stats = {users: {}, projects: {}};
+    const stats = {users: {} as any, projects: {} as any};
     redisClient.smembers('acl_meta@roles', (_err, roles) => {
         redisClient.smembers('acl_meta@users', (_err, users) => {
             let i = 0;
-            users.forEach((user) => {
+            users.forEach((user: any) => {
                 stats.users[user] = [];
                 acl.userRoles(user, (_err, uroles) => {
                     stats.users[user] = uroles;
@@ -474,8 +516,8 @@ app.get('/admin/stats', aclAdmin, (_req, res) => {
                         let g = 0;
                         roles.forEach((project) => {
                             const p = {
-                                students: undefined,
-                                commits: undefined
+                                students: undefined as undefined | number,
+                                commits: undefined as undefined | number,
                             };
                             stats.projects[project] = p;
                             countStudentsCSV(project, (r) => {
@@ -502,14 +544,14 @@ app.get('/admin/stats', aclAdmin, (_req, res) => {
 
 app.get('/admin/du', aclAdmin, (_req, res) => {
     const size = childProcess.spawn('du', ['-k', '-d 2'], {
-        cwd: PROJECTS_FOLDER
+        cwd: PROJECTS_FOLDER,
     });
     size.stdout.setEncoding('utf8');
-    const projects = {};
+    const projects: any = {};
     const re = /(\d+)[\t ]+\.\/([^/]*)\/?(.*)/;
     const splitter = size.stdout.pipe(StreamSplitter('\n'));
     splitter.encoding = 'utf8';
-    splitter.on('token', function(data) {
+    splitter.on('token', function (data: string) {
         const entry = re.exec(data.trim());
         if (entry === null) {
             return;
@@ -520,7 +562,7 @@ app.get('/admin/du', aclAdmin, (_req, res) => {
         if (entry[3] === '') {
             projects[entry[2]].total = Number(entry[1]);
         } else {
-            const folder = {};
+            const folder: any = {};
             folder[entry[3]] = Number(entry[1]);
             projects[entry[2]].folders.push(folder);
         }
@@ -529,7 +571,7 @@ app.get('/admin/du', aclAdmin, (_req, res) => {
     size.on('exit', () => {
         Object.keys(projects).forEach((k) => {
             const p = projects[k];
-            const sum = p.folders.reduce((total, f) => {
+            const sum = p.folders.reduce((total: number, f: any) => {
                 return total + f[Object.keys(f)[0]];
             }, 0);
             p.folders.push({'.': p.total - sum});
@@ -540,22 +582,22 @@ app.get('/admin/du', aclAdmin, (_req, res) => {
 
 app.post('/admin/import', aclAdmin, (req, res) => {
     // Warning, does not check if project folder is valid
-    addProjectAcl(req.body.project, req.user.username);
+    addProjectAcl(req.body.project, req.user?.username);
     res.sendStatus(200);
 });
 
 app.post('/admin/addtoproject', aclAdmin, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     acl.addUserRoles(req.user.username, req.body.project);
     const msg = `ADMIN: ${req.user.username} added himself to ${req.body.project}`;
-    console.log(msg);
     Sentry.captureMessage(msg);
     res.sendStatus(200);
 });
 
 app.post('/admin/removefromproject', aclAdmin, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     acl.removeUserRoles(req.user.username, req.body.project);
     const msg = `ADMIN: ${req.user.username} removed himself from ${req.body.project}`;
-    console.log(msg);
     Sentry.captureMessage(msg);
     res.sendStatus(200);
 });
@@ -606,14 +648,14 @@ version > 1.2.1 feature seuil-up not supported
 app.post('/login', (req, res) => {
     if (req.body.username) {
         const username = req.body.username.toLowerCase();
-        const sendToken = (user): void => {
+        const sendToken = (user: any): void => {
             try {
                 delete user.password;
                 delete user.keyHandle;
                 delete user.publicKey;
                 delete user.u2fRequest;
-                const token = jwt.sign(user, process.env.JWT_SECRET, {
-                    expiresIn: '6h'
+                const token = jwt.sign(user, process.env.JWT_SECRET || '', {
+                    expiresIn: '6h',
                 });
                 res.json({token: token});
             } catch (e) {
@@ -621,7 +663,7 @@ app.post('/login', (req, res) => {
                 res.status(500).send(e);
             }
         };
-        redisClient.get('user:' + username, function(_err, reply) {
+        redisClient.get('user:' + username, function (_err, reply) {
             let u2fAnswer;
 
             if (reply) {
@@ -668,7 +710,9 @@ app.post('/login', (req, res) => {
                 ) {
                     if (!user.u2f && req.body.u2fRegistration) {
                         //handle u2f key registration
-                        user.u2fRequest = u2f.request(process.env.SITE_URL);
+                        user.u2fRequest = u2f.request(
+                            process.env.SITE_URL || ''
+                        );
                         //store u2fRequest in user
                         redisClient.set(
                             'user:' + user.username,
@@ -678,7 +722,7 @@ app.post('/login', (req, res) => {
                                     res.sendStatus(500);
                                 } else {
                                     res.json({
-                                        u2f: user.u2fRequest
+                                        u2f: user.u2fRequest,
                                     });
                                 }
                             }
@@ -686,7 +730,7 @@ app.post('/login', (req, res) => {
                     } else if (user.u2f) {
                         //handle u2f key validation
                         user.u2fRequest = u2f.request(
-                            process.env.SITE_URL,
+                            process.env.SITE_URL || '',
                             user.keyHandle
                         );
                         //store u2fRequest in user
@@ -698,7 +742,7 @@ app.post('/login', (req, res) => {
                                     res.sendStatus(500);
                                 } else {
                                     res.json({
-                                        u2f: user.u2fRequest
+                                        u2f: user.u2fRequest,
                                     });
                                 }
                             }
@@ -732,7 +776,7 @@ app.post('/login', (req, res) => {
 });
 
 app.post('/profile/removeU2f', (req, res) => {
-    redisClient.get('user:' + req.user.username, function(_err, reply) {
+    redisClient.get('user:' + req.user?.username, function (_err, reply) {
         if (reply) {
             const user = JSON.parse(reply);
             delete user.keyHandle;
@@ -759,7 +803,7 @@ app.post('/profile/removeU2f', (req, res) => {
 app.post('/changePassword', (req, res) => {
     if (req.body.password && req.body.username && req.body.newPassword) {
         const username = req.body.username.toLowerCase();
-        redisClient.get('user:' + username, function(_err, reply) {
+        redisClient.get('user:' + username, function (_err, reply) {
             if (reply) {
                 const user = JSON.parse(reply);
                 if (bcrypt.compareSync(req.body.password, user.password)) {
@@ -788,8 +832,9 @@ app.post('/changePassword', (req, res) => {
 });
 
 app.get('/project/list', (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     acl.userRoles(req.user.username, (_err, roles) => {
-        const projects = [];
+        const projects: any[] = [];
         roles.forEach((role) => {
             redisClient.hgetall(
                 'project:' + role + ':status',
@@ -798,7 +843,7 @@ app.get('/project/list', (req, res) => {
                         projects.push({
                             project: role,
                             status: status,
-                            users: users
+                            users: users,
                         });
                         if (projects.length === roles.length) {
                             res.json(projects);
@@ -812,7 +857,7 @@ app.get('/project/list', (req, res) => {
 
 app.get('/project/recent', (req, res) => {
     redisClient.zrevrange(
-        'user:' + req.user.username + ':recent',
+        'user:' + req.user?.username + ':recent',
         0,
         -1,
         (err, list) => {
@@ -825,7 +870,12 @@ app.get('/project/recent', (req, res) => {
     );
 });
 
-function createProject(projectName, username, success, error): void {
+function createProject(
+    projectName: string,
+    username: string,
+    success: (project: string) => void,
+    error: () => void
+): void {
     // create project
     const project = slug(projectName);
     if (project === 'admin') {
@@ -874,7 +924,7 @@ function createProject(projectName, username, success, error): void {
                 '--liste',
                 PROJECTS_FOLDER + '/' + project + '/students.csv',
                 '--liste-key',
-                'id'
+                'id',
             ],
             null
         );
@@ -889,10 +939,10 @@ function createProject(projectName, username, success, error): void {
     }
 }
 
-function commitGit(project, username, message): void {
+function commitGit(project: string, username: string, message: string): void {
     const g = git(PROJECTS_FOLDER + '/' + project);
     g.init()
-        ._run(['add', '--all', '.'], (err) => {
+        ._run(['add', '--all', '.'], (err: Error | null) => {
             if (err) {
                 console.log('add', err);
                 Sentry.captureException(err);
@@ -907,9 +957,9 @@ function commitGit(project, username, message): void {
                     username +
                     '@amcui.ig.he-arc.ch>',
                 '-m',
-                message
+                message,
             ],
-            (err) => {
+            (err: Error | null) => {
                 if (err) {
                     console.log('commit', err);
                     Sentry.captureException(err);
@@ -919,6 +969,7 @@ function commitGit(project, username, message): void {
 }
 
 app.post('/project/create', (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     createProject(
         req.body.project,
         req.user.username,
@@ -940,7 +991,7 @@ app.get('/project/:project/options', aclProject, (req, res) => {
                     res.json({
                         options: result ? result.project : {},
                         users: users,
-                        status: status
+                        status: status,
                     });
                 }
             );
@@ -949,13 +1000,14 @@ app.get('/project/:project/options', aclProject, (req, res) => {
 });
 
 app.post('/project/:project/options', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     const filename = path.resolve(
         PROJECTS_FOLDER,
         req.params.project + '/options.xml'
     );
     const builder = new xml2js.Builder();
     const xml = builder.buildObject({project: req.body.options});
-    fs.writeFile(filename, xml, function(err) {
+    fs.writeFile(filename, xml, function (err) {
         if (err) {
             res.sendStatus(500);
         } else {
@@ -963,7 +1015,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
                 'update:options',
                 req.body.options
             );
-            commitGit(req.params.project, req.user.username, 'options');
+            commitGit(req.params.project, req.user?.username || '', 'options');
             res.sendStatus(200);
         }
     });
@@ -982,6 +1034,7 @@ app.post('/project/:project/copy/template', aclProject, (req, res) => {
 });
 
 app.post('/project/:project/copy/project', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     const src = req.params.project;
     const dest = req.body.project.toLowerCase();
     createProject(
@@ -996,6 +1049,11 @@ app.post('/project/:project/copy/project', aclProject, (req, res) => {
                         res.status(500).send('Failed to copy src files.');
                     } else {
                         redisClient.get('exam:' + src, (_err, result) => {
+                            if (!result || _err) {
+                                return res
+                                    .status(500)
+                                    .send('Failed to copy data.');
+                            }
                             redisClient.set('exam:' + dest, result, (err) => {
                                 if (err) {
                                     res.status(500).send(
@@ -1018,6 +1076,7 @@ app.post('/project/:project/copy/project', aclProject, (req, res) => {
 
 //TODO: handle only graphics or codes needed?
 app.post('/project/:project/copy/graphics', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     const src = req.params.project;
     const dest = req.body.project.toLowerCase();
     acl.hasRole(req.user.username, dest, (_err, hasRole) => {
@@ -1040,6 +1099,7 @@ app.post('/project/:project/copy/graphics', aclProject, (req, res) => {
 });
 //TODO: refactor?
 app.post('/project/:project/copy/codes', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     const src = req.params.project;
     const dest = req.body.project.toLowerCase();
     acl.hasRole(req.user.username, dest, (_err, hasRole) => {
@@ -1068,7 +1128,7 @@ app.post('/project/:project/add', aclProject, (req, res) => {
 
 app.post('/project/:project/remove', aclProject, (req, res) => {
     //cannot remove self
-    if (req.body.username === req.user.username) {
+    if (req.body.username === req.user?.username) {
         res.sendStatus(500);
     } else {
         acl.removeUserRoles(req.body.username, req.params.project);
@@ -1095,15 +1155,15 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
         }
         redisClient.renamenx('exam:' + project, 'exam:' + newProject);
         acl.allow(newProject, '/project/' + newProject, 'admin');
-        acl.roleUsers(project, (_err, users: string[]) => {
-            users.forEach((username) => {
+        acl.roleUsers(project, (_err, users: any) => {
+            users.forEach((username: string) => {
                 acl.removeUserRoles(username, project);
                 acl.addUserRoles(username, newProject);
                 redisClient.zrem('user:' + username + ':recent', project);
             });
         });
-        redisClient.keys('project:' + project + ':*', function(_err, keys) {
-            keys.forEach(function(key) {
+        redisClient.keys('project:' + project + ':*', function (_err, keys) {
+            keys.forEach(function (key) {
                 const entries = key.split(':');
                 redisClient.renamenx(
                     key,
@@ -1123,8 +1183,8 @@ app.post('/project/:project/delete', aclProject, (req, res) => {
     if (project.length === 0 || project.indexOf('.') === 0) {
         return res.sendStatus(404);
     }
-    acl.roleUsers(project, (_err, users: string[]) => {
-        users.forEach((username) => {
+    acl.roleUsers(project, (_err, users: any) => {
+        users.forEach((username: string) => {
             acl.removeUserRoles(username, project);
             redisClient.zrem('user:' + username + ':recent', project);
         });
@@ -1132,8 +1192,8 @@ app.post('/project/:project/delete', aclProject, (req, res) => {
         acl.removeRole(project);
         acl.removeResource(project);
         redisClient.del('exam:' + project);
-        redisClient.keys('project:' + project + ':*', function(_err, keys) {
-            keys.forEach(function(key) {
+        redisClient.keys('project:' + project + ':*', function (_err, keys) {
+            keys.forEach(function (key) {
                 redisClient.del(key);
             });
         });
@@ -1154,7 +1214,7 @@ app.get('/project/:project/gitlogs', aclProject, (req, res) => {
     //use cI when git version supports it
     g._run(
         ['log', '--walk-reflogs', '--pretty=format:%H%+gs%+an%+ci'],
-        (err, data) => {
+        (err: Error | null, data: any) => {
             if (err) {
                 res.status(500).send(err);
             }
@@ -1169,7 +1229,7 @@ app.get('/project/:project/gitlogs', aclProject, (req, res) => {
                     type: msg.substring(0, idx),
                     msg: msg.substring(idx + 2),
                     username: json[i + 2],
-                    date: new Date(json[i + 3])
+                    date: new Date(json[i + 3]),
                 };
                 logs.push(log);
                 i += 4;
@@ -1181,7 +1241,7 @@ app.get('/project/:project/gitlogs', aclProject, (req, res) => {
 
 app.post('/project/:project/revert', aclProject, (req, res) => {
     const g = git(PROJECTS_FOLDER + '/' + req.params.project);
-    g._run(['reset', '--hard', req.body.sha], (err) => {
+    g._run(['reset', '--hard', req.body.sha], (err: Error | null) => {
         if (err) {
             Sentry.captureException(err);
             res.status(500).send(err);
@@ -1196,7 +1256,7 @@ app.post('/project/:project/revert', aclProject, (req, res) => {
 
 app.get('/project/:project/zip', aclProject, (req, res) => {
     const zip = archiver('zip');
-    res.on('close', function() {
+    res.on('close', function () {
         return res.end();
     });
     res.attachment(req.params.project + '.zip');
@@ -1225,7 +1285,12 @@ app.get('/project/:project/static/:file*', aclProject, (req, res) => {
     );
 });
 
-function makeThumb(project, filename, id, callback): void {
+function makeThumb(
+    project: string,
+    filename: string,
+    id: string,
+    callback?: null | ((code: number | null) => void)
+): void {
     const GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + project + '/src/graphics/';
     const convert = childProcess.spawn(
         'convert',
@@ -1239,10 +1304,10 @@ function makeThumb(project, filename, id, callback): void {
             '-density',
             '120',
             filename + '[0]',
-            id + '_thumb.jpg'
+            id + '_thumb.jpg',
         ],
         {
-            cwd: GRAPHICS_FOLDER
+            cwd: GRAPHICS_FOLDER,
         }
     );
     convert.on('exit', (code) => {
@@ -1256,17 +1321,18 @@ function makeThumb(project, filename, id, callback): void {
 app.post(
     '/project/:project/upload/graphics',
     aclProject,
-    multipartMiddleware,
-    (req: multiparty.Request, res) => {
+    uploadMiddleware.single('file'),
+    (req, res) => {
+        if(!req.file) return res.sendStatus(500);
         const GRAPHICS_FOLDER =
             PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
         //keep extension
         const filename =
-            req.body.id + '.' + req.files.file.name.split('.').splice(-1)[0];
-        fs.copySync(req.files.file.path, GRAPHICS_FOLDER + filename);
+            req.body.id + '.' + req.file.originalname.split('.').splice(-1)[0];
+        fs.copySync(req.file.path, GRAPHICS_FOLDER + filename);
         // don't forget to delete all req.files when done
-        fs.unlinkSync(req.files.file.path);
-        makeThumb(req.params.project, filename, req.body.id, (code) => {
+        fs.unlinkSync(req.file.path);
+        makeThumb(req.params.project, filename, req.body.id, (code: any) => {
             if (code === 0) {
                 res.sendStatus(200);
             } else {
@@ -1321,7 +1387,7 @@ app.post('/project/:project/graphics/delete', aclProject, (req, res) => {
     }
 });
 
-function saveSourceFilesSync(project, body): void {
+function saveSourceFilesSync(project: string, body: any): void {
     const OUT_FOLDER = PROJECTS_FOLDER + '/' + project + '/out';
     fs.readdirSync(OUT_FOLDER).forEach((item) => {
         fs.unlinkSync(OUT_FOLDER + '/' + item);
@@ -1368,7 +1434,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
     }
 
     function compilePreviewSuccess(): void {
-        commitGit(project, req.user.username, 'preview');
+        commitGit(project, req.user?.username || '', 'preview');
         compilePreviewEnd();
     }
 
@@ -1403,7 +1469,7 @@ app.post('/project/:project/preview', aclProject, (req, res) => {
                                 '--n-copies',
                                 '1',
                                 'source.tex',
-                                '--latex-stdout'
+                                '--latex-stdout',
                             ],
                             compilePreviewSuccess,
                             compilePreviewEnd
@@ -1485,7 +1551,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                         PROJECT_FOLDER,
                         '--latex-stdout',
                         '--data',
-                        PROJECT_FOLDER + 'data'
+                        PROJECT_FOLDER + 'data',
                     ],
                     () => {
                         //corrige.pdf for all series
@@ -1507,7 +1573,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                 'source.tex',
                                 '--prefix',
                                 PROJECT_FOLDER,
-                                '--latex-stdout'
+                                '--latex-stdout',
                             ],
                             () => {
                                 //create capture and scoring db
@@ -1527,7 +1593,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                         PROJECT_FOLDER,
                                         '--data',
                                         PROJECT_FOLDER + 'data',
-                                        '--latex-stdout'
+                                        '--latex-stdout',
                                     ],
                                     () => {
                                         //create layout
@@ -1545,7 +1611,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                 '--progression-id',
                                                 'MEP',
                                                 '--progression',
-                                                '1'
+                                                '1',
                                             ],
                                             () => {
                                                 // print
@@ -1563,11 +1629,10 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                     '--progression-id',
                                                     'impression',
                                                     '--progression',
-                                                    '1'
+                                                    '1',
                                                 ];
                                                 if (
-                                                    result.project.split ===
-                                                    '1'
+                                                    result.project.split === '1'
                                                 ) {
                                                     params.push('--split');
                                                 }
@@ -1592,7 +1657,9 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                             });
                                                         commitGit(
                                                             project,
-                                                            req.user.username,
+                                                            req.user
+                                                                ?.username ||
+                                                                '',
                                                             'print'
                                                         );
                                                         redisClient.hmset(
@@ -1610,7 +1677,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
                                                                 '-notifications'
                                                         ).emit('print', {
                                                             action: 'end',
-                                                            pdfs: pdfs
+                                                            pdfs: pdfs,
                                                         });
                                                     }
                                                 );
@@ -1629,7 +1696,7 @@ app.post('/project/:project/print', aclProject, (req, res) => {
 
 app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
     const zip = archiver('zip');
-    res.on('close', function() {
+    res.on('close', function () {
         return res.end();
     });
     res.attachment(req.params.project + '.zip');
@@ -1639,13 +1706,13 @@ app.get('/project/:project/zip/pdf', aclProject, (req, res) => {
         'sujets'
     );
     zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/catalog.pdf', {
-        name: 'catalog.pdf'
+        name: 'catalog.pdf',
     });
     zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/corrige.pdf', {
-        name: 'corrige.pdf'
+        name: 'corrige.pdf',
     });
     zip.file(PROJECTS_FOLDER + '/' + req.params.project + '/calage.xy', {
-        name: 'calage.xy'
+        name: 'calage.xy',
     });
     zip.file(APP_FOLDER + '/assets/print.bat', {name: 'print.bat.txt'});
     zip.finalize();
@@ -1714,24 +1781,26 @@ $delta=0.1
 app.post(
     '/project/:project/upload',
     aclProject,
-    multipartMiddleware,
-    (req: multiparty.Request, res) => {
+    uploadMiddleware.single('file'),
+    (req, res) => {
+        if (!req.file) return res.sendStatus(500);
+        const filename = req.file.originalname;
         const PROJECT_FOLDER = PROJECTS_FOLDER + '/' + req.params.project + '/';
         const project = req.params.project;
         fs.copySync(
-            req.files.file.path,
+            req.file.path,
             path.resolve(
                 PROJECTS_FOLDER,
                 req.params.project,
                 'scans/',
-                req.files.file.name
+                filename
             )
         );
         // don't forget to delete all req.files when done
-        fs.unlinkSync(req.files.file.path);
+        fs.unlinkSync(req.file.path);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         tmp.file((_err, path, _fd, _cleanup) => {
-            fs.writeFileSync(path, 'scans/' + req.files.file.name);
+            fs.writeFileSync(path, 'scans/' + filename);
             // need to call getimage with file to get path of extracted files...
             amcCommande(
                 res,
@@ -1751,7 +1820,7 @@ app.post(
                     '--copy-to', // using copy-to to generate correct absolute url (needed for creating correct %PROJECT in DB)
                     PROJECT_FOLDER + 'scans',
                     '--list',
-                    path
+                    path,
                 ],
                 (logImages) => {
                     projectOptions(req.params.project, (_err, result) => {
@@ -1800,7 +1869,7 @@ app.post(
                                 );
                                 res.json({
                                     logImages: logImages,
-                                    logAnalyse: logAnalyse
+                                    logAnalyse: logAnalyse,
                                 });
                             }
                         );
@@ -1828,8 +1897,8 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
             'ORDER BY student, copy, page';
 
         db('all', query, (rows) => {
-            const seenTotal = [];
-            const seenMissing = [];
+            const seenTotal: any[] = [];
+            const seenMissing: any[] = [];
             if (!rows) {
                 rows = [];
             }
@@ -1892,7 +1961,7 @@ app.get(
                 {
                     $student: req.params.student,
                     $page: req.params.page,
-                    $copy: req.params.copy
+                    $copy: req.params.copy,
                 },
                 (row) => {
                     if (row) {
@@ -1902,7 +1971,7 @@ app.get(
                                 req.params.project +
                                 '/cr/' +
                                 row.layout_image,
-                            function(_err, dimensions) {
+                            function (_err, dimensions) {
                                 row.ratiox = 1;
                                 row.ratioy = 1;
                                 if (dimensions) {
@@ -1933,7 +2002,7 @@ app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
             {
                 $student: req.body.student,
                 $page: req.body.page,
-                $copy: req.body.copy
+                $copy: req.body.copy,
             },
             () => {
                 query =
@@ -1944,7 +2013,7 @@ app.post('/project/:project/capture/setauto', aclProject, (req, res) => {
                     {
                         $student: req.body.student,
                         $page: req.body.page,
-                        $copy: req.body.copy
+                        $copy: req.body.copy,
                     },
                     () => {
                         redisClient.hset(
@@ -1971,7 +2040,7 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
             {
                 $student: req.body.student,
                 $page: req.body.page,
-                $copy: req.body.copy
+                $copy: req.body.copy,
             },
             () => {
                 query =
@@ -1988,7 +2057,7 @@ app.post('/project/:project/capture/setmanual', aclProject, (req, res) => {
                         // eslint-disable-next-line @typescript-eslint/camelcase
                         $id_a: req.body.id_a,
                         // eslint-disable-next-line @typescript-eslint/camelcase
-                        $id_b: req.body.id_b
+                        $id_b: req.body.id_b,
                     },
                     () => {
                         redisClient.hset(
@@ -2028,10 +2097,10 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
             {
                 $student: req.body.student,
                 $page: req.body.page,
-                $copy: req.body.copy
+                $copy: req.body.copy,
             },
             (rows) => {
-                rows.forEach((row) => {
+                rows.forEach((row: any) => {
                     fs.unlink(
                         PROJECTS_FOLDER +
                             '/' +
@@ -2050,7 +2119,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                     {
                         $student: req.body.student,
                         $page: req.body.page,
-                        $copy: req.body.copy
+                        $copy: req.body.copy,
                     },
                     () => {
                         db(
@@ -2059,7 +2128,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                             {
                                 $student: req.body.student,
                                 $page: req.body.page,
-                                $copy: req.body.copy
+                                $copy: req.body.copy,
                             },
                             () => {
                                 db(
@@ -2068,7 +2137,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                     {
                                         $student: req.body.student,
                                         $page: req.body.page,
-                                        $copy: req.body.copy
+                                        $copy: req.body.copy,
                                     },
                                     () => {
                                         db(
@@ -2076,7 +2145,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                             'DELETE FROM scoring_score WHERE student=$student AND copy=$copy',
                                             {
                                                 $student: req.body.student,
-                                                $copy: req.body.copy
+                                                $copy: req.body.copy,
                                             },
                                             () => {
                                                 db(
@@ -2085,7 +2154,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                                     {
                                                         $student:
                                                             req.body.student,
-                                                        $copy: req.body.copy
+                                                        $copy: req.body.copy,
                                                     },
                                                     () => {
                                                         db(
@@ -2095,9 +2164,8 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                                                 $student:
                                                                     req.body
                                                                         .student,
-                                                                $copy:
-                                                                    req.body
-                                                                        .copy
+                                                                $copy: req.body
+                                                                    .copy,
                                                             },
                                                             () => {
                                                                 db(
@@ -2108,10 +2176,9 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                                                                             req
                                                                                 .body
                                                                                 .student,
-                                                                        $copy:
-                                                                            req
-                                                                                .body
-                                                                                .copy
+                                                                        $copy: req
+                                                                            .body
+                                                                            .copy,
                                                                     },
                                                                     () => {
                                                                         redisClient.hset(
@@ -2175,7 +2242,7 @@ app.get(
                 {
                     $student: req.params.student,
                     $page: req.params.page,
-                    $copy: req.params.copy
+                    $copy: req.params.copy,
                 },
                 (rows) => {
                     res.json(rows);
@@ -2208,7 +2275,7 @@ app.get('/project/:project/scoring', aclProject, (req, res) => {
                 PROJECT_FOLDER,
                 '--data',
                 PROJECT_FOLDER + 'data',
-                '--latex-stdout'
+                '--latex-stdout',
             ],
             (logScoring) => {
                 res.json(logScoring);
@@ -2222,7 +2289,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
         PROJECTS_FOLDER,
         req.params.project + '/students.csv'
     );
-    fs.writeFile(filename, req.body, function(err) {
+    fs.writeFile(filename, req.body, function (err) {
         if (err) {
             res.sendStatus(500).end();
             return;
@@ -2243,7 +2310,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
                     '--liste',
                     filename,
                     '--liste-key',
-                    'id'
+                    'id',
                 ],
                 (log) => {
                     res.json({log: log});
@@ -2254,6 +2321,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
 });
 
 app.get('/project/:project/csv', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     userSaveVisit(req.user.username, req.params.project);
     res.sendFile(
         path.resolve(PROJECTS_FOLDER, req.params.project + '/students.csv')
@@ -2298,7 +2366,7 @@ app.post('/project/:project/association/manual', aclProject, (req, res) => {
             '--copy',
             req.body.copy,
             '--id',
-            req.body.id
+            req.body.id,
         ],
         (log) => {
             res.json({log: log});
@@ -2321,7 +2389,10 @@ app.get('/project/:project/names', aclProject, (req, res) => {
     });
 });
 
-function calculateMarks(project, callback): void {
+function calculateMarks(
+    project: string,
+    callback?: (log: string) => void
+): void {
     const PROJECT_FOLDER = PROJECTS_FOLDER + '/' + project + '/';
     projectOptions(project, (_err, result) => {
         projectThreshold(project, (_err2, threshold) => {
@@ -2350,7 +2421,7 @@ function calculateMarks(project, callback): void {
                     '--progression-id',
                     'notation',
                     '--progression',
-                    '1'
+                    '1',
                 ],
                 (log) => {
                     redisClient.hset(
@@ -2446,7 +2517,7 @@ app.get('/project/:project/ods', aclProject, (req, res) => {
             '--option-out',
             'columns=student.copy,student.key,student.name',
             '--option-out',
-            'statsindic=1'
+            'statsindic=1',
         ],
         () => {
             res.attachment('export.ods');
@@ -2461,6 +2532,7 @@ ANNOTATE
 */
 
 app.post('/project/:project/annotate', aclProject, (req, res) => {
+    if (!req.user) return res.sendStatus(403);
     redisClient.hget(
         'project:' + req.params.project + ':status',
         'locked',
@@ -2470,7 +2542,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
             }
             res.sendStatus(200);
             ws.to(req.params.project + '-notifications').emit('annotate', {
-                action: 'start'
+                action: 'start',
             });
             redisClient.hmset(
                 'project:' + req.params.project + ':status',
@@ -2527,7 +2599,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         result.project.modele_regroupement || '(ID)',
                         '--force-ascii', //TODO  try without but fix url
                         '--sort',
-                        result.project.export_sort  || 'l',
+                        result.project.export_sort || 'l',
                         '--line-width',
                         '2',
                         '--font-name',
@@ -2567,10 +2639,10 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         '--with',
                         'pdflatex',
                         '--filter',
-                        'latex'
+                        'latex',
                     ];
                     if (req.body.ids) {
-                        req.body.ids.forEach((id) => {
+                        req.body.ids.forEach((id: string) => {
                             fs.writeFileSync(tmpFile, id);
                         });
                         params.push('--id-file');
@@ -2594,58 +2666,73 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                             cleanup();
                             commitGit(
                                 req.params.project,
-                                req.user.username,
+                                req.user?.username || '',
                                 'annotate'
                             );
                             redisClient.hmset(
-                                'project:' +
-                                    req.params.project +
-                                    ':status',
+                                'project:' + req.params.project + ':status',
                                 'locked',
                                 0,
                                 'annotated',
                                 new Date().getTime()
                             );
 
-                            function respond(filename): void {
+                            function respond(filename?: string): void {
                                 ws.to(
                                     req.params.project + '-notifications'
                                 ).emit('annotate', {
                                     action: 'end',
                                     type: req.body.ids ? 'single' : 'all',
-                                    file: filename
+                                    file: filename,
                                 });
                             }
 
-                            function databaseReport(project, student, copy, callback): void {
+                            function databaseReport(
+                                project: string,
+                                student: number,
+                                copy: number,
+                                callback: (filename?: string) => void
+                            ): void {
                                 const db = new sqlite3.Database(
-                                    PROJECTS_FOLDER + '/' + project + '/data/report.sqlite',
+                                    PROJECTS_FOLDER +
+                                        '/' +
+                                        project +
+                                        '/data/report.sqlite',
                                     (err) => {
                                         if (err) {
                                             callback(undefined);
                                         }
                                         db.all(
                                             'SELECT file FROM report_student WHERE student=$student AND copy=$copy',
-                                            {$student: student, $copy: copy},(_err, rows) => {
+                                            {$student: student, $copy: copy},
+                                            (_err, rows) => {
                                                 let filename = undefined;
-                                                if(rows && rows.length > 0) {
-                                                    filename = 'cr/corrections/pdf/' + rows[0].file;
+                                                if (rows && rows.length > 0) {
+                                                    filename =
+                                                        'cr/corrections/pdf/' +
+                                                        rows[0].file;
                                                 }
                                                 callback(filename);
-                                        });
+                                            }
+                                        );
                                     }
                                 );
                             }
 
                             if (req.body.ids) {
-                                req.body.ids.forEach((id) => {
-                                    let student = id
-                                    let copy = 0
+                                req.body.ids.forEach((id: any) => {
+                                    let student = id;
+                                    let copy = 0;
                                     if (isNaN(id)) {
                                         [student, copy] = id.split(':');
                                     }
-                                    databaseReport(req.params.project, student, copy, respond);
-                                })
+                                    databaseReport(
+                                        req.params.project,
+                                        Number(student),
+                                        Number(copy),
+                                        respond
+                                    );
+                                });
                             } else {
                                 respond(undefined);
                             }
@@ -2659,7 +2746,7 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
 
 app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
     const zip = archiver('zip');
-    res.on('close', function() {
+    res.on('close', function () {
         return res.end();
     });
     res.attachment(req.params.project + '_annotate.zip');
@@ -2669,7 +2756,7 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
         'annotate'
     );
     zip.file(APP_FOLDER + '/assets/extractFirstPage.bat', {
-        name: 'extractFirstPage.bat.txt'
+        name: 'extractFirstPage.bat.txt',
     });
     zip.file(APP_FOLDER + '/assets/print.bat', {name: 'print.bat.txt'});
     zip.finalize();
@@ -2696,7 +2783,7 @@ app.get('/project/:project/stats', aclProject, (req, res) => {
     database(req, res, (db) => {
         let query =
             "SELECT value FROM scoring.scoring_variables WHERE name='darkness_threshold'";
-        db('get', query, (setting) => {
+        db('get', query, (setting: any) => {
             let threshold = 0.5; //TODO change?
             if (setting && setting.value) {
                 threshold = setting.value;
@@ -2711,8 +2798,8 @@ app.get('/project/:project/stats', aclProject, (req, res) => {
                     'ORDER BY t.question';
 
                 db('all', query, (questionsList) => {
-                    const questions = {};
-                    questionsList.forEach((question) => {
+                    const questions: any = {};
+                    questionsList.forEach((question: any) => {
                         question.answers = [];
                         questions[question.question] = question;
                     });
@@ -2753,7 +2840,7 @@ app.get('/project/:project/stats', aclProject, (req, res) => {
                             'GROUP BY z.id_a, z.id_b, a.correct';
 
                         db('all', query, {$threshold: threshold}, (rows) => {
-                            rows.forEach((row) => {
+                            rows.forEach((row: any) => {
                                 if (questions[row.question]) {
                                     if (row.answer === 'all') {
                                         questions[row.question].total = row.nb;
@@ -2778,20 +2865,27 @@ app.get('/project/:project/stats', aclProject, (req, res) => {
 });
 
 //for acl middlware we have to handle its custom httperror
-app.use((err, _req, res, next) => {
-    // Move on if everything is alright
-    if (!err) {
-        return next();
+app.use(
+    (
+        err: any,
+        _req: express.Request,
+        res: express.Response,
+        next: express.NextFunction
+    ) => {
+        // Move on if everything is alright
+        if (!err) {
+            return next();
+        }
+        // Something is wrong, inform user
+        if (err.errorCode && err.msg) {
+            console.log('custom_error_handler:', err.errorCode, err.msg);
+            res.status(err.errorCode).json(err.msg);
+        } else {
+            console.log('custom_error_handler_skip:', err);
+            next(err);
+        }
     }
-    // Something is wrong, inform user
-    if (err.errorCode && err.msg) {
-        console.log('custom_error_handler:', err.errorCode, err.msg);
-        res.status(err.errorCode).json(err.msg);
-    } else {
-        console.log('custom_error_handler_skip:', err);
-        next(err);
-    }
-});
+);
 
 app.use(Sentry.Handlers.errorHandler());
 
@@ -2799,11 +2893,12 @@ if (env === 'development') {
     app.use(errorHandler({log: true}));
 }
 
-server.listen(process.env.SERVER_PORT, '0.0.0.0');
-server.on('listening', function() {
+httpServer.listen(process.env.SERVER_PORT);
+httpServer.on('listening', function () {
+    const address = httpServer.address();
     console.log(
         'server listening on port %d in %s mode',
-        server.address().port,
+        typeof address === 'string' ? address : address?.port,
         app.settings.env
     );
 });

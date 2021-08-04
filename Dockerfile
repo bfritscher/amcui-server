@@ -1,4 +1,4 @@
-FROM node:13-buster
+FROM node:14-buster
 RUN apt-get update && apt-get install -y \
     auto-multiple-choice \
     graphicsmagick \
