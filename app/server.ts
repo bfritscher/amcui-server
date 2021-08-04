@@ -1,4 +1,3 @@
-require('dotenv').config();
 import fs from 'fs-extra';
 import StreamSplitter from 'stream-splitter';
 import cors from 'cors';
@@ -16,7 +15,7 @@ import redis from 'redis';
 import xml2js from 'xml2js';
 import mkdirp from 'mkdirp';
 import ACL from 'acl2';
-import multer from "multer";
+import multer from 'multer';
 import tmp from 'tmp';
 import childProcess from 'child_process';
 import git from 'simple-git';
@@ -25,9 +24,17 @@ import archiver from 'archiver';
 import slug from 'slug';
 import sizeOf from 'image-size';
 import diffSync from 'diffsync';
-import redisDataAdapter from './diffsyncredis';
+import redisDataAdapter from './diffsyncredis.js';
+import {fileURLToPath} from 'url';
+import {dirname} from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 slug.defaults.mode = 'rfc3986';
+
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET env variable must be set!');
+}
 
 // This allows TypeScript to detect our global value
 declare global {
@@ -61,8 +68,6 @@ if (process.env.SENTRY_DSN) {
     });
 }
 
-
-
 const APP_FOLDER = path.resolve(__dirname, '../app/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 
@@ -83,16 +88,30 @@ function addProjectAcl(project: string, username: string | undefined): void {
 
 const app = express();
 app.use(Sentry.Handlers.requestHandler());
+
+const corsOptions: cors.CorsOptions = {
+    origin: true,
+    credentials: true,
+    exposedHeaders: [
+        'Accept-Ranges',
+        'Content-Encoding',
+        'Content-Length',
+        'Content-Range',
+    ],
+};
+
+app.use(cors(corsOptions));
+
 const httpServer = createServer(app);
-const ws = new Server(httpServer);
+const ws = new Server(httpServer, {cors: corsOptions});
 
 ws.use(
     authorize({
-        secret: process.env.JWT_SECRET || '',
+        secret: process.env.JWT_SECRET,
     })
 );
 
-const uploadMiddleware = multer();
+const uploadMiddleware = multer({dest: '/tmp/amcui-uploads/'});
 
 //in memory rooms users list
 interface SocketRef {
@@ -119,6 +138,7 @@ function userSaveVisit(username: string, projectName: string): void {
 ws.on('connection', (socket) => {
     //this socket is authenticated, we are good to handle more events from it.
     const username: string = socket.decodedToken.username;
+
     socket.on('listen', (project: string) => {
         acl.hasRole(username, project, (_err, hasRole) => {
             if (!hasRole) {
@@ -170,7 +190,7 @@ ws.on('connection', (socket) => {
 
 const dataAdapter = new redisDataAdapter(redisClient, 'exam');
 const diffSyncServer = new diffSync.Server(dataAdapter, ws);
-console.log('diffSyncServer started', diffSyncServer.adapter.namespace); //ts lint
+console.log('diffSyncServer started', diffSyncServer.adapter.namespace);
 
 const env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
@@ -178,19 +198,6 @@ if (env === 'development') {
 } else if (env === 'production') {
     app.use(express.static(__dirname + '/public'));
 }
-
-app.use(
-    cors({
-        origin: true,
-        credentials: true,
-        exposedHeaders: [
-            'Accept-Ranges',
-            'Content-Encoding',
-            'Content-Length',
-            'Content-Range',
-        ],
-    })
-);
 
 app.use(express.urlencoded({extended: true}));
 app.use(express.json({limit: '50mb'}));
@@ -208,7 +215,7 @@ app.use(function (req, _res, next) {
 });
 
 const secure = expressJwt({
-    secret: process.env.JWT_SECRET || '',
+    secret: process.env.JWT_SECRET,
     algorithms: ['HS256'],
     getToken: function fromHeaderOrQuerystring(req) {
         if (
@@ -480,25 +487,21 @@ function countStudentsCSV(
     });
 }
 
-function countGitCommits(
+async function countGitCommits(
     project: string,
     callback: (count: number) => void
-): void {
+): Promise<void> {
     if (!fs.existsSync(PROJECTS_FOLDER + '/' + project + '/.git')) {
         callback(-1);
         return;
     }
-    const g = git(PROJECTS_FOLDER + '/' + project);
-    g._run(
-        ['rev-list', '--count', 'master'],
-        (err: Error | null, data: string) => {
-            if (err) {
-                callback(-1);
-            } else {
-                callback(Number(data.trim()));
-            }
-        }
-    );
+    try {
+        const g = git(PROJECTS_FOLDER + '/' + project);
+        const data = await g.raw(['rev-list', '--count', 'master']);
+        callback(Number(data.trim()));
+    } catch (err) {
+        callback(-1);
+    }
 }
 
 app.get('/admin/stats', aclAdmin, (_req, res) => {
@@ -939,33 +942,33 @@ function createProject(
     }
 }
 
-function commitGit(project: string, username: string, message: string): void {
+async function commitGit(
+    project: string,
+    username: string,
+    message: string
+): Promise<void> {
     const g = git(PROJECTS_FOLDER + '/' + project);
-    g.init()
-        ._run(['add', '--all', '.'], (err: Error | null) => {
+    await g.init().catch();
+    await g.raw(['add', '--all', '.'], (err: Error | null) => {
+        if (err) {
+            console.log('add', err);
+            Sentry.captureException(err);
+        }
+    });
+    await g.raw(
+        [
+            'commit',
+            '--author=' + username + ' <' + username + '@amcui.ig.he-arc.ch>',
+            '-m',
+            message,
+        ],
+        (err: Error | null) => {
             if (err) {
-                console.log('add', err);
+                console.log('commit', err);
                 Sentry.captureException(err);
             }
-        })
-        ._run(
-            [
-                'commit',
-                '--author=' +
-                    username +
-                    ' <' +
-                    username +
-                    '@amcui.ig.he-arc.ch>',
-                '-m',
-                message,
-            ],
-            (err: Error | null) => {
-                if (err) {
-                    console.log('commit', err);
-                    Sentry.captureException(err);
-                }
-            }
-        );
+        }
+    );
 }
 
 app.post('/project/create', (req, res) => {
@@ -1209,39 +1212,40 @@ delete/recreate git
 flag as archive
 */
 
-app.get('/project/:project/gitlogs', aclProject, (req, res) => {
-    const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
     //use cI when git version supports it
-    g._run(
-        ['log', '--walk-reflogs', '--pretty=format:%H%+gs%+an%+ci'],
-        (err: Error | null, data: any) => {
-            if (err) {
-                res.status(500).send(err);
-            }
-            const logs = [];
-            const json = data.split('\n');
-            let i = 0;
-            while (i < json.length) {
-                const msg = json[i + 1];
-                const idx = msg.indexOf(':');
-                const log = {
-                    sha: json[i],
-                    type: msg.substring(0, idx),
-                    msg: msg.substring(idx + 2),
-                    username: json[i + 2],
-                    date: new Date(json[i + 3]),
-                };
-                logs.push(log);
-                i += 4;
-            }
-            res.json(logs);
+    try {
+        const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+        const data = await g.raw([
+            'log',
+            '--walk-reflogs',
+            '--pretty=format:%H%+gs%+an%+ci',
+        ]);
+        const logs = [];
+        const json = data.split('\n');
+        let i = 0;
+        while (i < json.length) {
+            const msg = json[i + 1];
+            const idx = msg.indexOf(':');
+            const log = {
+                sha: json[i],
+                type: msg.substring(0, idx),
+                msg: msg.substring(idx + 2),
+                username: json[i + 2],
+                date: new Date(json[i + 3]),
+            };
+            logs.push(log);
+            i += 4;
         }
-    );
+        res.json(logs);
+    } catch (err) {
+        res.status(500).send(err);
+    }
 });
 
 app.post('/project/:project/revert', aclProject, (req, res) => {
     const g = git(PROJECTS_FOLDER + '/' + req.params.project);
-    g._run(['reset', '--hard', req.body.sha], (err: Error | null) => {
+    g.raw(['reset', '--hard', req.body.sha], (err: Error | null) => {
         if (err) {
             Sentry.captureException(err);
             res.status(500).send(err);
@@ -1323,7 +1327,7 @@ app.post(
     aclProject,
     uploadMiddleware.single('file'),
     (req, res) => {
-        if(!req.file) return res.sendStatus(500);
+        if (!req.file) return res.sendStatus(500);
         const GRAPHICS_FOLDER =
             PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
         //keep extension
@@ -1492,7 +1496,7 @@ app.get('/project/:project/reset/lock', aclProject, (req, res) => {
         'preview',
         0,
         (err) => {
-            console.log(err);
+            console.log('lock reset', err);
         }
     );
     res.end();
@@ -1974,7 +1978,11 @@ app.get(
                             function (_err, dimensions) {
                                 row.ratiox = 1;
                                 row.ratioy = 1;
-                                if (dimensions) {
+                                if (
+                                    dimensions &&
+                                    dimensions.width &&
+                                    dimensions.height
+                                ) {
                                     row.ratiox = row.width / dimensions.width;
                                     row.ratioy = row.height / dimensions.height;
                                     row.width = dimensions.width;
@@ -2108,7 +2116,7 @@ app.post('/project/:project/capture/delete', aclProject, (req, res) => {
                             '/' +
                             row.path,
                         (err) => {
-                            console.log(err);
+                            console.log('unlick', err);
                         }
                     );
                 });
@@ -2642,8 +2650,8 @@ app.post('/project/:project/annotate', aclProject, (req, res) => {
                         'latex',
                     ];
                     if (req.body.ids) {
-                        req.body.ids.forEach((id: string) => {
-                            fs.writeFileSync(tmpFile, id);
+                        req.body.ids.forEach((id: number) => {
+                            fs.writeFileSync(tmpFile, String(id));
                         });
                         params.push('--id-file');
                         params.push(tmpFile);

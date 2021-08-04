@@ -10,7 +10,7 @@ services:
   amcuiserver:
     build: .
     env_file: .env
-    command: npm run debug
+    command: npm run dev
     working_dir: /amc
     volumes:
       - ./app:/amc/app

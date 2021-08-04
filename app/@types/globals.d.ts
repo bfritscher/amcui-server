@@ -1,9 +1,4 @@
-﻿declare module "is-online" {
-    function isOnline(callback:(err:Error, isOnline:boolean)=>void):void;
-    export = isOnline;
-}
-
-declare module "diffsync" {
+﻿declare module "diffsync" {
     export var InMemoryDataAdapter:{
         new():any;
     };
@@ -15,16 +10,6 @@ declare module "diffsync" {
 declare module "stream-splitter" {
     function StreamSplitter(splitter:string):any;
     export = StreamSplitter;
-}
-
-declare module "image-size" {
-    function sizeOf(uri:string, callback:(err:Error|null, dimensions:any) => void):any;
-    export = sizeOf;
-}
-
-declare module "simple-git" {
-    function SimpleGit(workingDirPath?:string):any;
-    export = SimpleGit;
 }
 
 declare module "u2f" {

@@ -1,6 +1,6 @@
-import redis = require('redis');
+import redis from 'redis';
 
-class RedisDataAdapter {
+export default class RedisDataAdapter {
     client: redis.RedisClient;
     namespace: string;
     debug: boolean;
@@ -53,4 +53,3 @@ class RedisDataAdapter {
         });
     }
 }
-export = RedisDataAdapter;
