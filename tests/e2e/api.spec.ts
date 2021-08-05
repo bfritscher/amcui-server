@@ -87,13 +87,28 @@ describe('API Project', () => {
       });
   });
 
+  // TODO: test auto-match
+
+  const studentCsv = 'id,name\n101,Alice\n102,Bob\n'
+  it('should set students.csv', async () => {
+    await api
+      .post(`/project/${PROJECT_NAME}/csv`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'text/csv')
+      .send(studentCsv)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toMatchObject({log:''});
+      });
+  });
+
   it('should get students.csv', async () => {
     await api
       .get(`/project/${PROJECT_NAME}/csv`)
       .set('Authorization', `Bearer ${token}`)
       .expect(200)
       .expect((res) => {
-        expect(res.text).toMatch('id,name');
+        expect(res.text).toMatch(studentCsv);
       });
   });
 
@@ -119,6 +134,48 @@ describe('API Project', () => {
    /project/:project/rename
 */
 
+  it('admin can get stats', async () => {
+    await api
+      .get(`/admin/stats`)
+      .set('Accept', 'application/json')
+      .set('Authorization', `Bearer ${token}`)
+      .expect('Content-Type', /application\/json/)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toEqual(
+          expect.objectContaining({
+            projects: expect.objectContaining({
+              [PROJECT_NAME]: {
+                students: 3, // TODO: FIX server to filter empty line
+                commits: -1,
+              },
+            }),
+            users: expect.objectContaining({
+              admin: expect.arrayContaining([PROJECT_NAME]),
+            }),
+          })
+        );
+      });
+  });
+
+  it('admin can get du', async () => {
+    await api
+      .get(`/admin/du`)
+      .set('Accept', 'application/json')
+      .set('Authorization', `Bearer ${token}`)
+      .expect('Content-Type', /application\/json/)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toEqual(
+          expect.objectContaining({
+            [PROJECT_NAME]: {folders: expect.arrayContaining([]), total: 140},
+          })
+        );
+      });
+  });
+
+  //TODO check permission denied for normal user
+
   it('delete existing project', async () => {
     await api
       .post(`/project/${PROJECT_NAME}/delete`)
@@ -135,6 +192,8 @@ describe('API Project', () => {
       .expect(500); // currently 500 TODO FIX
   });
 });
+
+// at end call /debug-exit to generate coverage report
 
 /*
 can login on websocket
@@ -185,7 +244,7 @@ calculateMarks
 
 /project/:project/zones/:student/:page::copy
 /project/:project/scoring
-/project/:project/csv
+
 /project/:project/gradefiles
 /project/:project/association/manual
 /project/:project/names
@@ -196,9 +255,5 @@ calculateMarks
 /project/:project/ods
 /project/:project/annotate
 /project/:project/zip/annotate
-
-
-TODO setup admin permissions
-/project/:project/stats
 
 */
