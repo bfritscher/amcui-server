@@ -32,8 +32,8 @@ const __dirname = dirname(__filename);
 
 slug.defaults.mode = 'rfc3986';
 
-/* c8 ignore next */
 if (!process.env.JWT_SECRET) {
+    /* c8 ignore next */
     throw new Error('JWT_SECRET env variable must be set!');
 }
 
@@ -69,7 +69,7 @@ if (process.env.SENTRY_DSN) {
     });
 }
 
-const APP_FOLDER = path.resolve(__dirname, '../app/');
+const APP_FOLDER = path.resolve(__dirname, '../src/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 
 const redisClient = redis.createClient(6379, 'redis', {});
@@ -473,7 +473,7 @@ app.get('/debug-sentry', () => {
 
 
 acl.allow('admin', '/admin', 'admin');
-acl.addUserRoles('boris', 'admin');
+acl.addUserRoles(process.env.ADMIN_USER || 'boris', 'admin');
 
 function countStudentsCSV(
     project: string,
