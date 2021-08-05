@@ -10,11 +10,12 @@ services:
   amcuiserver:
     build: .
     env_file: .env
-    command: npm run dev
+    command: npm run coverage
     working_dir: /amc
     volumes:
-      - ./app:/amc/app
+      - ./src:/amc/src
       - ./projects:/amc/projects
+      - ./coverage:/amc/coverage
     ports:
       - "8181:8181"
       - "5858:5858"

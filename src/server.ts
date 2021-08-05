@@ -32,6 +32,7 @@ const __dirname = dirname(__filename);
 
 slug.defaults.mode = 'rfc3986';
 
+/* c8 ignore next */
 if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET env variable must be set!');
 }
@@ -469,6 +470,7 @@ app.get('/', (_req, res) => {
 app.get('/debug-sentry', () => {
     throw new Error('Sentry express test');
 });
+
 
 acl.allow('admin', '/admin', 'admin');
 acl.addUserRoles('boris', 'admin');
@@ -2899,6 +2901,10 @@ app.use(Sentry.Handlers.errorHandler());
 
 if (env === 'development') {
     app.use(errorHandler({log: true}));
+    // for coverage report
+    app.get('/debug-exit', () => {
+        process.exit();
+    });
 }
 
 httpServer.listen(process.env.SERVER_PORT);
