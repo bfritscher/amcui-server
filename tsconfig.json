@@ -12,7 +12,9 @@
     "outDir": "./dist",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "strict": true
+    "strict": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
   "ts-node": {
     "moduleTypes": {

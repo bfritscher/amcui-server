@@ -1,39 +1,59 @@
-﻿declare module "diffsync" {
-    export var InMemoryDataAdapter:{
-        new():any;
-    };
-    export var Server:{
-        new(dataAdapter:any, io:any):any;
-    };
+﻿declare module 'diffsync' {
+  export let InMemoryDataAdapter: {
+    new (): any;
+  };
+  export let Server: {
+    new (dataAdapter: any, io: any): any;
+  };
 }
 
-declare module "stream-splitter" {
-    function StreamSplitter(splitter:string):any;
-    export = StreamSplitter;
+declare module 'stream-splitter' {
+  function StreamSplitter(splitter: string): any;
+  export = StreamSplitter;
 }
 
-declare module "u2f" {
-    interface Request {
-        version:string,
-        appId:string,
-        challenge:string,
-        keyHandle?:string
-    }
+declare module 'pdf-page-counter' {
+  interface pdfData {
+    numpages: number;
+    numrender: number;
+    info: any;
+    metadata: any;
+    version: string;
+    text: string;
+  }
+  function pdf(dataBuffer: Buffer): pdfData;
+  export = pdf;
+}
 
-    interface RegistrationResult {
-        successful: boolean;
-        publicKey: string;
-        keyHandle: string;
-        certificate: string;
-    }
+declare module 'u2f' {
+  interface Request {
+    version: string;
+    appId: string;
+    challenge: string;
+    keyHandle?: string;
+  }
 
-    interface SignatureResult {
-        successful: boolean;
-        userPresent: number;
-        counter: number
-    }
+  interface RegistrationResult {
+    successful: boolean;
+    publicKey: string;
+    keyHandle: string;
+    certificate: string;
+  }
 
-    export function request(appId:string, keyHandle?:string):Request;
-    export function checkRegistration(request:Request, registerData:Object):RegistrationResult;
-    export function checkSignature(request:Request, signResult:Object, publicKey:string):SignatureResult;
+  interface SignatureResult {
+    successful: boolean;
+    userPresent: number;
+    counter: number;
+  }
+
+  export function request(appId: string, keyHandle?: string): Request;
+  export function checkRegistration(
+    request: Request,
+    registerData: Object
+  ): RegistrationResult;
+  export function checkSignature(
+    request: Request,
+    signResult: Object,
+    publicKey: string
+  ): SignatureResult;
 }
