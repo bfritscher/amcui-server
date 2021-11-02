@@ -28,12 +28,20 @@ import {fileURLToPath} from 'url';
 import {dirname} from 'path';
 import {authenticator} from 'otplib';
 import QRCode from 'qrcode';
+import {Factor, Fido2Lib} from 'fido2-lib';
+import * as base64buffer from 'base64-arraybuffer';
+
 import * as Sentry from '@sentry/node';
 import * as Tracing from '@sentry/tracing';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 slug.defaults.mode = 'rfc3986';
+
+function str2ab(str: string) {
+  const enc = new TextEncoder();
+  return enc.encode(str);
+}
 
 if (!process.env.JWT_SECRET) {
   /* c8 ignore next */
@@ -77,6 +85,10 @@ redisClient.on('error', function (err) {
   Sentry.captureException(err);
 });
 const acl = new ACL(new ACL.redisBackend({redis: redisClient, prefix: 'acl'}));
+
+const f2l = new Fido2Lib({
+  rpName: 'AMCUI',
+});
 
 function addProjectAcl(project: string, username: string | undefined): void {
   if (!username) return;
@@ -645,14 +657,15 @@ app.post('/login', (req, res) => {
       try {
         delete user.password;
         user.authenticators = user.authenticators
-          ? user.authenticators.reduce(
-              (types: {[key: string]: boolean}, config: {type: string}) => {
-                types[config.type] = true;
-                return types;
-              },
-              {}
+          ? user.authenticators.map(
+              ({label, type}: {label: string; type: string}) => {
+                return {
+                  label,
+                  type,
+                };
+              }
             )
-          : {};
+          : [];
         const token = jwt.sign(user, process.env.JWT_SECRET || '', {
           expiresIn: '6h',
         });
@@ -662,20 +675,24 @@ app.post('/login', (req, res) => {
         res.status(500).send(e);
       }
     };
-    redisClient.get('user:' + username, function (_err, userData) {
+    redisClient.get('user:' + username, async (_err, userData) => {
       if (userData) {
         const user = JSON.parse(userData);
         if (bcrypt.compareSync(req.body.password, user.password)) {
           // check mfa
           if (user.authenticators && user.authenticators.length > 0) {
-            if (req.body.authenticators && req.body.authenticators.authenticator) {
-              // validate token
+            if (
+              req.body.authenticator &&
+              req.body.authenticator.type === 'authenticator' &&
+              req.body.authenticator.token
+            ) {
+              // validate token test all
               if (
                 user.authenticators
                   .filter((c: {type: string}) => c.type === 'authenticator')
                   .some((config: {secret: string}) => {
                     return authenticator.verify({
-                      token: req.body.authenticators.authenticator,
+                      token: req.body.authenticator.token,
                       secret: config.secret,
                     });
                   })
@@ -684,22 +701,87 @@ app.post('/login', (req, res) => {
               } else {
                 res.status(401).send('Wrong token');
               }
-            } else if (req.body.authenticators && req.body.authenticators.fido2) {
-              // validate fido2 TODO
-            } else {
-              // requrest mfa
-              const types = user.authenticators.reduce(
-                (types: {[key: string]: boolean}, config: {type: string}) => {
-                  types[config.type] = true;
-                  return types;
-                },
-                {}
+            } else if (
+              req.body.authenticator &&
+              req.body.authenticator.type === 'fido2'
+            ) {
+              // validate fido2
+              const logResponse = req.body.authenticator.response;
+              const credListFiltered = user.authenticators.filter(
+                (x: {credentialId: string}) =>
+                  x.credentialId == logResponse.rawId
               );
-              if (types.fido2) {
-                // TODO add challenge
-                types.fido2 = false;
+
+              if (!credListFiltered.length)
+                return res.status(404).send('Authenticator does not exist');
+              const thisCred = credListFiltered.pop();
+
+              logResponse.rawId = base64buffer.decode(logResponse.rawId);
+              logResponse.response.authenticatorData = base64buffer.decode(
+                logResponse.response.authenticatorData
+              );
+
+              const assertionExpectations = {
+                challenge: Fido2inMemoryChallenges[user.username],
+                origin: 'http://localhost:8080', // TODO config
+                factor: 'either' as Factor, // TODO config
+                publicKey: thisCred.publicKey,
+                prevCounter: thisCred.counter,
+                userHandle: thisCred.credentialId,
+              };
+
+              f2l
+                .assertionResult(logResponse, assertionExpectations)
+                .then((logResult) => {
+                  thisCred.counter = logResult.authnrData.get('counter');
+                  delete Fido2inMemoryChallenges[user.username];
+                  redisClient.set(
+                    'user:' + user.username,
+                    JSON.stringify(user),
+                    (err) => {
+                      if (err) {
+                        res.sendStatus(500);
+                      } else {
+                        sendToken(user);
+                      }
+                    }
+                  );
+                })
+                .catch((err) => {
+                  res.status(401).send(err.message);
+                });
+            } else {
+              // request mfa
+              const authenticators = {
+                authenticator: user.authenticators
+                  .filter(
+                    (config: {type: string}) => config.type === 'authenticator'
+                  )
+                  .map(({label, type}: {label: string; type: string}) => {
+                    return {
+                      label,
+                      type,
+                    };
+                  }),
+                fido2: {}, // TODO add fido request challenge
+              };
+              const filteredFido2 = user.authenticators.filter(
+                (config: {type: string}) => config.type === 'fido2'
+              );
+              if (filteredFido2.length > 0) {
+                const authnOptions: any = await f2l.assertionOptions();
+                authnOptions.challenge = base64buffer.encode(
+                  authnOptions.challenge
+                );
+                authnOptions.allowCredentials = filteredFido2.map(
+                  (config: {credentialId: string}) => {
+                    return {id: config.credentialId, type: 'public-key'};
+                  }
+                );
+                Fido2inMemoryChallenges[user.username] = authnOptions.challenge;
+                authenticators.fido2 = authnOptions;
               }
-              res.send(types);
+              res.send(authenticators);
             }
           } else {
             // only password login
@@ -745,14 +827,14 @@ app.post('/profile/addAuthenticator', (req, res) => {
     if (
       user.authenticators
         .filter((c: {type: string}) => c.type === 'authenticator')
-        .map((c: {name: string}) => c.name)
-        .includes(req.body.name)
+        .map((c: {label: string}) => c.label)
+        .includes(req.body.label)
     ) {
       return res.status(500).send('name already exists');
     }
     const authenticatorConfig = {
       type: 'authenticator',
-      name: req.body.name,
+      label: req.body.label,
       secret: authenticator.generateSecret(),
     };
     user.authenticators.push(authenticatorConfig);
@@ -795,7 +877,11 @@ app.post('/profile/removeMFA', (req, res) => {
     }
     user.authenticators = user.authenticators
       ? user.authenticators.filter(
-          (authConfig: {type: string}) => authConfig.type !== req.body.type
+          (authConfig: {type: string; label: string}) =>
+            !(
+              authConfig.type === req.body.type &&
+              authConfig.label === req.body.label
+            )
         )
       : [];
     redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
@@ -837,6 +923,93 @@ app.post('/changePassword', (req, res) => {
   } else {
     res.status(404).send('Wrong user or password');
   }
+});
+
+const Fido2inMemoryChallenges = {} as {[key: string]: string};
+
+app.get('/profile/addFido2', (req, res) => {
+  redisClient.get('user:' + req.user?.username, (_err, userData) => {
+    if (!userData) {
+      return res.sendStatus(401);
+    }
+    const user = JSON.parse(userData);
+    f2l
+      .attestationOptions()
+      .then((regOptions: any) => {
+        regOptions.user = {
+          id: base64buffer.encode(str2ab(user.username)),
+          name: user.username,
+          displayName: user.username,
+        };
+        regOptions.challenge = base64buffer.encode(regOptions.challenge);
+        Fido2inMemoryChallenges[user.username] = regOptions.challenge;
+        res.send(regOptions);
+      })
+      .catch(() => {
+        res.sendStatus(500);
+      });
+  });
+});
+
+app.post('/profile/addFido2', (req, res) => {
+  redisClient.get('user:' + req.user?.username, (_err, userData) => {
+    if (!userData) {
+      return res.sendStatus(401);
+    }
+    const user = JSON.parse(userData);
+    if (!bcrypt.compareSync(req.body.password, user.password)) {
+      return res.status(500).send('Wrong password');
+    }
+    if (!user.authenticators) {
+      user.authenticators = [];
+    }
+    if (
+      user.authenticators
+        .filter((c: {type: string}) => c.type === 'fido2')
+        .map((c: {label: string}) => c.label)
+        .includes(req.body.label)
+    ) {
+      return res.status(500).send('name already exists');
+    }
+
+    const regResponse = req.body.response;
+    regResponse.rawId = base64buffer.decode(regResponse.rawId);
+
+    const attestationExpectations = {
+      challenge: Fido2inMemoryChallenges[user.username],
+      origin: 'http://localhost:8080', // TODO config
+      factor: 'either' as Factor, // TODO config
+    };
+
+    f2l
+      .attestationResult(regResponse, attestationExpectations)
+      .then((regResult) => {
+        const authnrData = regResult.authnrData;
+        user.authenticators.push({
+          type: 'fido2',
+          label: req.body.label,
+          counter: authnrData.get('counter'),
+          credentialId: base64buffer.encode(authnrData.get('credId')),
+          publicKey: authnrData.get('credentialPublicKeyPem'),
+        });
+        delete Fido2inMemoryChallenges[user.username];
+        redisClient.set(
+          'user:' + user.username,
+          JSON.stringify(user),
+          (err) => {
+            if (err) {
+              res.sendStatus(500);
+            } else {
+              res.sendStatus(200);
+            }
+          }
+        );
+      })
+      .catch((err) => {
+        console.log(err);
+        res.status(500).send(err.message);
+      });
+  });
 });
 
 app.get('/project/list', (req, res) => {
