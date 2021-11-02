@@ -19,7 +19,6 @@ import multer from 'multer';
 import tmp from 'tmp';
 import childProcess from 'child_process';
 import git from 'simple-git';
-import u2f from 'u2f';
 import archiver from 'archiver';
 import slug from 'slug';
 import sizeOf from 'image-size';
@@ -27,6 +26,8 @@ import diffSync from 'diffsync';
 import redisDataAdapter from './diffsyncredis.js';
 import {fileURLToPath} from 'url';
 import {dirname} from 'path';
+import {authenticator} from 'otplib';
+import QRCode from 'qrcode';
 import * as Sentry from '@sentry/node';
 import * as Tracing from '@sentry/tracing';
 const __filename = fileURLToPath(import.meta.url);
@@ -643,9 +644,15 @@ app.post('/login', (req, res) => {
     const sendToken = (user: any): void => {
       try {
         delete user.password;
-        delete user.keyHandle;
-        delete user.publicKey;
-        delete user.u2fRequest;
+        user.authenticators = user.authenticators
+          ? user.authenticators.reduce(
+              (types: {[key: string]: boolean}, config: {type: string}) => {
+                types[config.type] = true;
+                return types;
+              },
+              {}
+            )
+          : {};
         const token = jwt.sign(user, process.env.JWT_SECRET || '', {
           expiresIn: '6h',
         });
@@ -655,84 +662,47 @@ app.post('/login', (req, res) => {
         res.status(500).send(e);
       }
     };
-    redisClient.get('user:' + username, function (_err, reply) {
-      let u2fAnswer;
-
-      if (reply) {
-        const user = JSON.parse(reply);
-
-        if (req.body.u2f) {
-          if (user.u2f) {
-            u2fAnswer = u2f.checkSignature(
-              user.u2fRequest,
-              req.body.u2f,
-              user.publicKey
-            );
-            if (u2fAnswer.successful) {
-              sendToken(user);
+    redisClient.get('user:' + username, function (_err, userData) {
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (bcrypt.compareSync(req.body.password, user.password)) {
+          // check mfa
+          if (user.authenticators && user.authenticators.length > 0) {
+            if (req.body.authenticators && req.body.authenticators.authenticator) {
+              // validate token
+              if (
+                user.authenticators
+                  .filter((c: {type: string}) => c.type === 'authenticator')
+                  .some((config: {secret: string}) => {
+                    return authenticator.verify({
+                      token: req.body.authenticators.authenticator,
+                      secret: config.secret,
+                    });
+                  })
+              ) {
+                sendToken(user);
+              } else {
+                res.status(401).send('Wrong token');
+              }
+            } else if (req.body.authenticators && req.body.authenticators.fido2) {
+              // validate fido2 TODO
             } else {
-              res.sendStatus(500);
-            }
-          } else {
-            u2fAnswer = u2f.checkRegistration(user.u2fRequest, req.body.u2f);
-            if (u2fAnswer.successful) {
-              user.u2f = true;
-              user.keyHandle = u2fAnswer.keyHandle;
-              user.publicKey = u2fAnswer.publicKey;
-              redisClient.set(
-                'user:' + user.username,
-                JSON.stringify(user),
-                (err) => {
-                  if (err) {
-                    res.sendStatus(500);
-                  } else {
-                    sendToken(user);
-                  }
-                }
+              // requrest mfa
+              const types = user.authenticators.reduce(
+                (types: {[key: string]: boolean}, config: {type: string}) => {
+                  types[config.type] = true;
+                  return types;
+                },
+                {}
               );
-            } else {
-              res.sendStatus(500);
+              if (types.fido2) {
+                // TODO add challenge
+                types.fido2 = false;
+              }
+              res.send(types);
             }
-          }
-        } else if (bcrypt.compareSync(req.body.password, user.password)) {
-          if (!user.u2f && req.body.u2fRegistration) {
-            //handle u2f key registration
-            user.u2fRequest = u2f.request(process.env.SITE_URL || '');
-            //store u2fRequest in user
-            redisClient.set(
-              'user:' + user.username,
-              JSON.stringify(user),
-              (err) => {
-                if (err) {
-                  res.sendStatus(500);
-                } else {
-                  res.json({
-                    u2f: user.u2fRequest,
-                  });
-                }
-              }
-            );
-          } else if (user.u2f) {
-            //handle u2f key validation
-            user.u2fRequest = u2f.request(
-              process.env.SITE_URL || '',
-              user.keyHandle
-            );
-            //store u2fRequest in user
-            redisClient.set(
-              'user:' + user.username,
-              JSON.stringify(user),
-              (err) => {
-                if (err) {
-                  res.sendStatus(500);
-                } else {
-                  res.json({
-                    u2f: user.u2fRequest,
-                  });
-                }
-              }
-            );
           } else {
+            // only password login
             sendToken(user);
           }
         } else {
@@ -760,24 +730,81 @@ app.post('/login', (req, res) => {
   }
 });
 
-app.post('/profile/removeU2f', (req, res) => {
-  redisClient.get('user:' + req.user?.username, function (_err, reply) {
-    if (reply) {
-      const user = JSON.parse(reply);
-      delete user.keyHandle;
-      delete user.publicKey;
-      delete user.u2fRequest;
-      delete user.u2f;
-      redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
-        if (err) {
-          res.sendStatus(500);
-        } else {
-          res.sendStatus(200);
-        }
-      });
-    } else {
-      res.sendStatus(401);
+app.post('/profile/addAuthenticator', (req, res) => {
+  redisClient.get('user:' + req.user?.username, (_err, userData) => {
+    if (!userData) {
+      return res.sendStatus(401);
     }
+    const user = JSON.parse(userData);
+    if (!bcrypt.compareSync(req.body.password, user.password)) {
+      return res.status(500).send('Wrong password');
+    }
+    if (!user.authenticators) {
+      user.authenticators = [];
+    }
+    if (
+      user.authenticators
+        .filter((c: {type: string}) => c.type === 'authenticator')
+        .map((c: {name: string}) => c.name)
+        .includes(req.body.name)
+    ) {
+      return res.status(500).send('name already exists');
+    }
+    const authenticatorConfig = {
+      type: 'authenticator',
+      name: req.body.name,
+      secret: authenticator.generateSecret(),
+    };
+    user.authenticators.push(authenticatorConfig);
+    redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+      if (err) {
+        res.sendStatus(500);
+      } else {
+        // TODO config
+        const service = 'AMCUI Server';
+        const otpauthUrl = authenticator.keyuri(
+          user.username,
+          service,
+          authenticatorConfig.secret
+        );
+        QRCode.toDataURL(otpauthUrl)
+          .then((qrCodeDataUrl) => {
+            res.send({
+              otpauthUrl,
+              qrCodeDataUrl,
+            });
+          })
+          .catch(() => {
+            res.send({
+              otpauthUrl,
+            });
+          });
+      }
+    });
+  });
+});
+
+app.post('/profile/removeMFA', (req, res) => {
+  redisClient.get('user:' + req.user?.username, (_err, userData) => {
+    if (!userData) {
+      return res.sendStatus(401);
+    }
+    const user = JSON.parse(userData);
+    if (!bcrypt.compareSync(req.body.password, user.password)) {
+      return res.status(500).send('Wrong user or password');
+    }
+    user.authenticators = user.authenticators
+      ? user.authenticators.filter(
+          (authConfig: {type: string}) => authConfig.type !== req.body.type
+        )
+      : [];
+    redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+      if (err) {
+        res.sendStatus(500);
+      } else {
+        res.sendStatus(200);
+      }
+    });
   });
 });
 
