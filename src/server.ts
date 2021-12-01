@@ -615,28 +615,67 @@ app.post('/admin/removefromproject', aclAdmin, (req, res) => {
   res.sendStatus(200);
 });
 
-/*
-TODO
+app.post('/admin/user/:username/removemfa', aclAdmin, (req, res) => {
+  redisClient.get('user:' + req.params.username, (_err, reply) => {
+    if (reply) {
+      const user = JSON.parse(reply);
+      user.authenticators = [];
+      redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+        if (err) {
+          res.sendStatus(500);
+        } else {
+          res.sendStatus(200);
+        }
+      });
+    } else {
+      res.status(404).send('user not found');
+    }
+  });
+});
 
-Change options of a project
-	-> some trigger other functions? (marks, annotations)
+app.post('/admin/user/:username/changepassword', aclAdmin, (req, res) => {
+  redisClient.get('user:' + req.params.username, (_err, reply) => {
+    if (reply) {
+      const user = JSON.parse(reply);
+      user.password = bcrypt.hashSync(req.body.newPassword, 10);
+      redisClient.set('user:' + user.username, JSON.stringify(user), (err) => {
+        if (err) {
+          res.sendStatus(500);
+        } else {
+          res.sendStatus(200);
+        }
+      });
+    } else {
+      res.status(404).send('user not found');
+    }
+  });
+});
 
-Upload a project?
+app.post('/admin/project/:project/delete', aclAdmin, (req, res) => {
+  deleteProject(req.params.project, (err) => {
+    if (err) {
+      res.sendStatus(404);
+    } else {
+      res.sendStatus(200);
+    }
+  });
+});
 
-Edit Latex
-	-> recompute markings?
+app.post('/admin/user/:username/delete', aclAdmin, (req, res) => {
+  const username = req.params.username;
+  acl.userRoles(username, (err, roles) => {
+    if (err) {
+      return res.sendStatus(500);
+    }
+    roles.forEach((project) => {
+      acl.removeUserRoles(username, project);
+    });
+    redisClient.del('user:' + username);
+    redisClient.del('user:' + username + ':recent');
+    res.sendStatus(200);
+  });
+});
 
-Print
-   ->before check layout (user interaction?)
-
-save formulas
-save custom csv data
-
-
-REFACTOR
-all file/folder names
-
-*/
 /*
 ZONE_FRAME=>1,
 ZONE_NAME=>2,
@@ -731,8 +770,9 @@ app.post('/login', (req, res) => {
 
               const assertionExpectations = {
                 challenge: Fido2inMemoryChallenges[user.username],
-                origin: 'http://localhost:8080', // TODO config
-                factor: 'either' as Factor, // TODO config
+                origin:
+                  process.env.FIDO2_FRONTEND_ORIGIN || 'http://localhost:8080',
+                factor: 'either' as Factor, // TODO config?
                 publicKey: thisCred.publicKey,
                 prevCounter: thisCred.counter,
                 userHandle: thisCred.credentialId,
@@ -1356,10 +1396,9 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
   });
 });
 
-app.post('/project/:project/delete', aclProject, (req, res) => {
-  const project = req.params.project;
+function deleteProject(project: string, callback: (err: boolean) => void) {
   if (project.length === 0 || project.indexOf('.') === 0) {
-    return res.sendStatus(404);
+    callback(true);
   }
   acl.roleUsers(project, (_err, users: any) => {
     users.forEach((username: string) => {
@@ -1375,9 +1414,24 @@ app.post('/project/:project/delete', aclProject, (req, res) => {
         redisClient.del(key);
       });
     });
-    fs.remove(PROJECTS_FOLDER + '/' + project);
+    fs.remove(PROJECTS_FOLDER + '/' + project, (err) => {
+      if (err) {
+        callback(true);
+      } else {
+        callback(false);
+      }
+    });
   });
-  res.sendStatus(200);
+}
+
+app.post('/project/:project/delete', aclProject, (req, res) => {
+  deleteProject(req.params.project, (err) => {
+    if (err) {
+      res.sendStatus(404);
+    } else {
+      res.sendStatus(200);
+    }
+  });
 });
 
 /*
