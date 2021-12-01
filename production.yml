@@ -16,6 +16,7 @@ services:
     volumes:
       - ./dist/public:/amc/dist/public
       - ./projects:/amc/projects
+      - ./templates:/amc/templates      
     ports:
       - "127.0.0.1:9002:9001"
     depends_on:

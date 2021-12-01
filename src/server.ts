@@ -78,6 +78,7 @@ if (process.env.SENTRY_DSN) {
 
 const APP_FOLDER = path.resolve(__dirname, '../src/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
+const TEMPLATES_FOLDER = path.resolve(__dirname, '../templates/');
 
 const redisClient = redis.createClient(6379, 'redis', {});
 redisClient.on('error', function (err) {
@@ -466,6 +467,13 @@ function amcCommande(
 
 app.get('/', (_req, res) => {
   res.send('AMCUI API SERVER');
+});
+
+app.get('/templates', async (_req, res) => {
+  const files = await fs.readdir(TEMPLATES_FOLDER, {withFileTypes: true});
+  res.json(
+    files.filter((dirent) => dirent.isDirectory()).map((dirent) => dirent.name)
+  );
 });
 
 app.get('/debug-sentry', () => {
@@ -1200,7 +1208,7 @@ app.post('/project/:project/options', aclProject, (req, res) => {
 });
 
 app.post('/project/:project/copy/template', aclProject, (req, res) => {
-  const TEMPLATE_FOLDER = APP_FOLDER + '/assets/templates/' + req.body.template;
+  const TEMPLATE_FOLDER = TEMPLATES_FOLDER + '/' + req.body.template;
   fs.copy(
     TEMPLATE_FOLDER + '/src',
     PROJECTS_FOLDER + '/' + req.params.project + '/src',

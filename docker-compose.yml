@@ -15,6 +15,7 @@ services:
     volumes:
       - ./src:/amc/src
       - ./projects:/amc/projects
+      - ./templates:/amc/templates
       - ./coverage:/amc/coverage
     ports:
       - "8181:8181"

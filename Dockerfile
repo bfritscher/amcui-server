@@ -13,6 +13,7 @@ RUN npm install
 RUN npm run build
 
 VOLUME ["/amc/projects"]
+VOLUME ["/amc/templates"]
 
 # Define default command.
 CMD ["node", "dist/server.js"]
