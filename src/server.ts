@@ -774,7 +774,7 @@ app.post('/login', (req, res) => {
               const assertionExpectations = {
                 challenge: Fido2inMemoryChallenges[user.username],
                 origin:
-                  process.env.FRONTEND_DOMAIN ? `https://${process.env.FRONTEND_DOMAIN}` || 'http://localhost:8080',
+                  process.env.FRONTEND_DOMAIN ? `https://${process.env.FRONTEND_DOMAIN}` : 'http://localhost:8080',
                 factor: 'either' as Factor, // TODO config?
                 publicKey: thisCred.publicKey,
                 prevCounter: thisCred.counter,
