@@ -52,4 +52,7 @@ services:
     networks:
       - web
       - default
+networks:
+  web:
+    external: true
 
