@@ -1,0 +1,55 @@
+version: "3"
+
+services:
+  reverse-proxy:
+    image: traefik:v2.5
+    command: --providers.docker
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - web
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik/traefik.yml:/traefik.yml
+      - ./traefik/acme.json:/acme.json      
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1G"
+        max-file: "3"      
+  redis:
+    image: redis
+    restart: always
+    volumes:
+      - ./data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+  amcuiserver:
+    build: .
+    env_file: .env
+    working_dir: /amc
+    restart: always
+    volumes:
+      - ./frontend/dist/spa:/amc/dist/public
+      - ./projects:/amc/projects
+      - ./templates:/amc/templates
+    depends_on:
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.https_redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https_redirect.redirectscheme.permanent=true"
+      - "traefik.http.services.amcui.loadbalancer.server.port=${SERVER_PORT}"
+      - "traefik.http.routers.amcui.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.amcui.entrypoints=web"
+      - "traefik.http.routers.amcui.middlewares=https_redirect"
+      - "traefik.http.routers.amcui_secured.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.amcui_secured.entrypoints=websecure"
+      - "traefik.http.routers.amcui_secured.tls=true"
+      - "traefik.http.routers.amcui_secured.tls.certresolver=myresolver"
+    networks:
+      - web
+      - default
+

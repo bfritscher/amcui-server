@@ -481,7 +481,10 @@ app.get('/debug-sentry', () => {
 });
 
 acl.allow('admin', '/admin', 'admin');
-acl.addUserRoles(process.env.ADMIN_USER || 'boris', 'admin');
+if (process.env.ADMIN_USER) {
+  addProjectAcl('admin', process.env.ADMIN_USER)
+}
+
 
 function countStudentsCSV(
   project: string,
@@ -771,7 +774,7 @@ app.post('/login', (req, res) => {
               const assertionExpectations = {
                 challenge: Fido2inMemoryChallenges[user.username],
                 origin:
-                  process.env.FIDO2_FRONTEND_ORIGIN || 'http://localhost:8080',
+                  process.env.FRONTEND_DOMAIN ? `https://${process.env.FRONTEND_DOMAIN}` || 'http://localhost:8080',
                 factor: 'either' as Factor, // TODO config?
                 publicKey: thisCred.publicKey,
                 prevCounter: thisCred.counter,
@@ -1399,6 +1402,9 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
 function deleteProject(project: string, callback: (err: boolean) => void) {
   if (project.length === 0 || project.indexOf('.') === 0) {
     callback(true);
+  }
+  if (project === 'admin') {
+    return callback(true)
   }
   acl.roleUsers(project, (_err, users: any) => {
     users.forEach((username: string) => {

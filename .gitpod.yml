@@ -1,3 +1,5 @@
 tasks:
   - init: docker-compose build
     command: docker-compose up
+ports:
+  - port: 9001    

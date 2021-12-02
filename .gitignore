@@ -1,6 +1,6 @@
 projects/
 .tmp/
-dist/
+frontend/
 node_modules/
 .env
 .production.env
