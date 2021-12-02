@@ -13,12 +13,12 @@ services:
       # So that Traefik can listen to the Docker events
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik/traefik.yml:/traefik.yml
-      - ./traefik/acme.json:/acme.json      
+      - ./traefik/acme.json:/acme.json
     logging:
       driver: "json-file"
       options:
         max-size: "1G"
-        max-file: "3"      
+        max-file: "3"
   redis:
     image: redis
     restart: always
@@ -39,6 +39,7 @@ services:
       - redis
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=web"
       - "traefik.http.middlewares.https_redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.https_redirect.redirectscheme.permanent=true"
       - "traefik.http.services.amcui.loadbalancer.server.port=${SERVER_PORT}"

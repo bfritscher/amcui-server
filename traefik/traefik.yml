@@ -5,6 +5,10 @@ entryPoints:
   websecure:
     address: ":443"
 
+providers:
+  docker:
+    exposedByDefault: false
+
 certificatesResolvers:
   myresolver:
     acme:

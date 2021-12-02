@@ -21,6 +21,8 @@ FRONTEND_DOMAIN=
 ```
 
 ```
+touch traefik/acme.json
+chmod 600 traefik/acme.json
 docker-compose -f docker-compose.production.yml pull
 docker-compose -f docker-compose.production.yml build
 docker-compose -f docker-compose.production.yml up -d
