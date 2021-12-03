@@ -26,7 +26,7 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
   amcuiserver:
-    build: ghcr.io/bfritscher/amcui-server:latest
+    image: ghcr.io/bfritscher/amcui-server:latest
     env_file: .env
     restart: always
     volumes:
