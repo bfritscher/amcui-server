@@ -547,7 +547,7 @@ app.get('/admin/stats', aclAdmin, async (_req: any, res: any) => {
   });
   const aclProjects = (await pRedis('smembers', 'acl_meta@roles')) as string[];
   aclProjects.forEach((name: string) => {
-    users.add(name);
+    roles.add(name);
   });
 
   const dbUsers = (await pRedis('keys', 'user:*')) as string[];
