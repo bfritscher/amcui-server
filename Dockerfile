@@ -8,9 +8,12 @@ RUN sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xm
 RUN git config --global user.email "root@amcui.ig.he-arc.ch"
 RUN git config --global user.name "GradeManager (AMCUI)"
 RUN mkdir -p /amc
-COPY . /amc/
 WORKDIR /amc
+COPY package.json /amc/package.json
 RUN npm install
+ARG COMMIT_SHA=""
+ENV COMMIT_SHA=${COMMIT_SHA}
+COPY . /amc/
 RUN npm run build
 
 VOLUME ["/amc/projects"]

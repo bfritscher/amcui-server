@@ -7,3 +7,4 @@ node_modules/
 data/
 coverage/
 docker-compose.override.yml
+dist

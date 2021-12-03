@@ -1,7 +1,11 @@
-docker
+.git
+data
 .env
-.production.env
+traefik
+coverage
 Dockerfile
 docker-compose.yml
 node_modules/*
 projects/*
+package-lock.json
+dist

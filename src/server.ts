@@ -466,7 +466,10 @@ function amcCommande(
 }
 
 app.get('/', (_req, res) => {
-  res.send('AMCUI API SERVER');
+  res.json({
+    name: 'AMCUI API SERVER',
+    sha: process.env.COMMIT_SHA,
+  });
 });
 
 app.get('/templates', async (_req, res) => {
@@ -518,9 +521,9 @@ async function countGitCommits(
   }
 }
 
-function pRedis(action: string, arg: any) {
+function pRedis(action:string, arg: any) {
   return new Promise((resolve, reject) => {
-    redisClient[action](arg, (err: any, result: any) => {
+    (redisClient as any)[action](arg, (err: any, result: any) => {
       if (err) {
         reject(err);
       } else {
