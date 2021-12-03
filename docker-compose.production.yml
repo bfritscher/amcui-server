@@ -3,7 +3,6 @@ version: "3"
 services:
   reverse-proxy:
     image: traefik:v2.5
-    command: --providers.docker
     ports:
       - "80:80"
       - "443:443"
@@ -27,9 +26,8 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
   amcuiserver:
-    build: .
+    build: ghcr.io/bfritscher/amcui-server:latest
     env_file: .env
-    working_dir: /amc
     restart: always
     volumes:
       - ./frontend/dist/spa:/amc/dist/public
@@ -42,7 +40,28 @@ services:
       - "traefik.docker.network=web"
       - "traefik.http.middlewares.https_redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.https_redirect.redirectscheme.permanent=true"
-      - "traefik.http.services.amcui.loadbalancer.server.port=${SERVER_PORT}"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+      - "traefik.http.services.amcui_api.loadbalancer.server.port=${SERVER_PORT}"
+      - "traefik.http.routers.amcui_api.rule=Host(`${FRONTEND_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.amcui_api.entrypoints=web"
+      - "traefik.http.routers.amcui_api.middlewares=https_redirect"
+      - "traefik.http.routers.amcui_api_secured.rule=Host(`${FRONTEND_DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.amcui_api_secured.middlewares=api-stripprefix"
+      - "traefik.http.routers.amcui_api_secured.entrypoints=websecure"
+      - "traefik.http.routers.amcui_api_secured.tls=true"
+      - "traefik.http.routers.amcui_api_secured.tls.certresolver=myresolver"
+    networks:
+      - web
+      - default
+  grademanager:
+    image: ghcr.io/bfritscher/amcui-grademanager:latest
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.middlewares.https_redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https_redirect.redirectscheme.permanent=true"
+      - "traefik.http.services.amcui.loadbalancer.server.port=80"
       - "traefik.http.routers.amcui.rule=Host(`${FRONTEND_DOMAIN}`)"
       - "traefik.http.routers.amcui.entrypoints=web"
       - "traefik.http.routers.amcui.middlewares=https_redirect"

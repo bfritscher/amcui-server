@@ -1,0 +1,8 @@
+version: "3"
+
+services:
+  grademanager:
+    environment:
+      - SENTRY_DSN=https://<key>@sentry.io/<project>
+      - AMCUI_API=/api
+      - GA_CODE=UA-XXXXX-X
