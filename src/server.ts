@@ -482,80 +482,106 @@ app.get('/debug-sentry', () => {
 
 acl.allow('admin', '/admin', 'admin');
 if (process.env.ADMIN_USER) {
-  addProjectAcl('admin', process.env.ADMIN_USER)
+  addProjectAcl('admin', process.env.ADMIN_USER);
 }
 
-
-function countStudentsCSV(
-  project: string,
-  callback: (count: number) => void
-): void {
+function countStudentsCSV(project: string): Promise<number> {
   const filename = path.resolve(PROJECTS_FOLDER, project + '/students.csv');
-  fs.readFile(filename, (err, data) => {
-    if (err) {
-      callback(-1);
-    } else {
-      callback(data.toString('utf8').split('\n').length - 1);
-    }
+  return new Promise((resolve) => {
+    fs.readFile(filename, (err: any, data: any) => {
+      if (err) {
+        resolve(-1);
+      } else {
+        resolve(data.toString('utf8').split('\n').length - 1);
+      }
+    });
   });
 }
 
+// TODO migrate master to main?
 async function countGitCommits(
   project: string,
-  callback: (count: number) => void
-): Promise<void> {
+  branch = 'master'
+): Promise<number> {
   if (!fs.existsSync(PROJECTS_FOLDER + '/' + project + '/.git')) {
-    callback(-1);
-    return;
+    return -1;
   }
   try {
     const g = git(PROJECTS_FOLDER + '/' + project);
-    const data = await g.raw(['rev-list', '--count', 'master']);
-    callback(Number(data.trim()));
+    const data = await g.raw(['rev-list', '--count', branch]);
+    return Number(data.trim());
   } catch (err) {
-    callback(-1);
+    if (branch === 'master') {
+      return countGitCommits(project, 'main');
+    }
+    return -1;
   }
 }
 
-app.get('/admin/stats', aclAdmin, (_req, res) => {
-  const stats = {users: {} as any, projects: {} as any};
-  redisClient.smembers('acl_meta@roles', (_err, roles) => {
-    redisClient.smembers('acl_meta@users', (_err, users) => {
-      let i = 0;
-      users.forEach((user: any) => {
-        stats.users[user] = [];
-        acl.userRoles(user, (_err, uroles) => {
-          stats.users[user] = uroles;
-          i++;
-          if (i === users.length) {
-            let s = 0;
-            let g = 0;
-            roles.forEach((project) => {
-              const p = {
-                students: undefined as undefined | number,
-                commits: undefined as undefined | number,
-              };
-              stats.projects[project] = p;
-              countStudentsCSV(project, (r) => {
-                p.students = r;
-                s++;
-                if (s === roles.length && g === roles.length) {
-                  res.json(stats);
-                }
-              });
-              countGitCommits(project, (r) => {
-                p.commits = r;
-                g++;
-                if (s === roles.length && g === roles.length) {
-                  res.json(stats);
-                }
-              });
-            });
-          }
-        });
-      });
+function pRedis(action: string, arg: any) {
+  return new Promise((resolve, reject) => {
+    redisClient[action](arg, (err: any, result: any) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result);
+      }
     });
   });
+}
+
+app.get('/admin/stats', aclAdmin, async (_req: any, res: any) => {
+  const stats = {users: {} as any, projects: {} as any};
+  const roles = new Set<string>();
+  const users = new Set<string>();
+  const exams = (await pRedis('keys', 'exam:*')) as string[];
+  exams.forEach((name: string) => {
+    roles.add(name.split(':')[1]);
+  });
+  const projects = (await pRedis('keys', 'project:*')) as string[];
+  projects.forEach((name: string) => {
+    roles.add(name.split(':')[1]);
+  });
+  const aclProjects = (await pRedis('smembers', 'acl_meta@roles')) as string[];
+  aclProjects.forEach((name: string) => {
+    users.add(name);
+  });
+
+  const dbUsers = (await pRedis('keys', 'user:*')) as string[];
+  dbUsers.forEach((name: string) => {
+    users.add(name.split(':')[1]);
+  });
+
+  const aclUsers = (await pRedis('smembers', 'acl_meta@users')) as string[];
+  aclUsers.forEach((name: string) => {
+    users.add(name);
+  });
+
+  await Promise.all(
+    [...users].map((user: string): Promise<void> => {
+      stats.users[user] = [];
+      return new Promise((resolve) => {
+        acl.userRoles(user, (_err, uroles) => {
+          stats.users[user] = uroles;
+          resolve();
+        });
+      });
+    })
+  );
+
+  await Promise.all(
+    [...roles].map(async (project: string) => {
+      const p = {
+        students: undefined as undefined | number,
+        commits: undefined as undefined | number,
+      };
+      stats.projects[project] = p;
+      p.commits = await countGitCommits(project);
+      p.students = await countStudentsCSV(project);
+    })
+  );
+
+  res.json(stats);
 });
 
 app.get('/admin/du', aclAdmin, (_req, res) => {
@@ -664,6 +690,16 @@ app.post('/admin/project/:project/delete', aclAdmin, (req, res) => {
   });
 });
 
+
+app.post('/admin/project/:project/gitgc', aclAdmin, async (req, res) => {
+  const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+  const data = await g.raw([
+    'gc',
+    '--aggressive',
+  ]);
+  res.json(data);
+});
+
 app.post('/admin/user/:username/delete', aclAdmin, (req, res) => {
   const username = req.params.username;
   acl.userRoles(username, (err, roles) => {
@@ -675,6 +711,7 @@ app.post('/admin/user/:username/delete', aclAdmin, (req, res) => {
     });
     redisClient.del('user:' + username);
     redisClient.del('user:' + username + ':recent');
+    redisClient.srem('acl_meta@users', username);
     res.sendStatus(200);
   });
 });
@@ -773,8 +810,9 @@ app.post('/login', (req, res) => {
 
               const assertionExpectations = {
                 challenge: Fido2inMemoryChallenges[user.username],
-                origin:
-                  process.env.FRONTEND_DOMAIN ? `https://${process.env.FRONTEND_DOMAIN}` : 'http://localhost:8080',
+                origin: process.env.FRONTEND_DOMAIN
+                  ? `https://${process.env.FRONTEND_DOMAIN}`
+                  : 'http://localhost:8080',
                 factor: 'either' as Factor, // TODO config?
                 publicKey: thisCred.publicKey,
                 prevCounter: thisCred.counter,
@@ -1404,7 +1442,7 @@ function deleteProject(project: string, callback: (err: boolean) => void) {
     callback(true);
   }
   if (project === 'admin') {
-    return callback(true)
+    return callback(true);
   }
   acl.roleUsers(project, (_err, users: any) => {
     users.forEach((username: string) => {
