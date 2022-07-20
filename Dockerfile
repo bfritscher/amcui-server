@@ -14,7 +14,7 @@ RUN npm install
 ARG COMMIT_SHA=""
 ENV COMMIT_SHA=${COMMIT_SHA}
 COPY . /amc/
-RUN npm run build
+RUN node --version && npm run build
 
 VOLUME ["/amc/projects"]
 VOLUME ["/amc/templates"]
