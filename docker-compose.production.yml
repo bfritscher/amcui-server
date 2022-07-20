@@ -13,6 +13,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik/traefik.yml:/traefik.yml
       - ./traefik/acme.json:/acme.json
+      - ./traefik/conf.yml:/conf.yml
     logging:
       driver: "json-file"
       options:

@@ -6,6 +6,8 @@ entryPoints:
     address: ":443"
 
 providers:
+  file:
+    filename: "/conf.yml"
   docker:
     exposedByDefault: false
 
