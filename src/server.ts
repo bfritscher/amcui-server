@@ -2925,7 +2925,7 @@ REPORT_PRINTED_COPY         => 3,
 REPORT_ANONYMIZED_PDF       => 4,
                     */
                     db.all(
-                      'SELECT file FROM report_student WHERE student=$student AND copy=$copy AND type=3',
+                      'SELECT file FROM report_student WHERE student=$student AND copy=$copy AND type=1',
                       {$student: student, $copy: copy},
                       (_err, rows) => {
                         let filename = undefined;
