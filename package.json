@@ -43,7 +43,7 @@
     "fido2-lib": "2.6.8",
     "fs-extra": "10.1.0",
     "image-size": "1.0.2",
-    "jsonwebtoken": "8.5.1",
+    "jsonwebtoken": "9.0.0",
     "mkdirp": "1.0.4",
     "multer": "1.4.3",
     "otplib": "12.0.1",
