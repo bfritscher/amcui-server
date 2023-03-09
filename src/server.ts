@@ -521,7 +521,7 @@ async function countGitCommits(
   }
 }
 
-function pRedis(action:string, arg: any) {
+function pRedis(action: string, arg: any) {
   return new Promise((resolve, reject) => {
     (redisClient as any)[action](arg, (err: any, result: any) => {
       if (err) {
@@ -693,13 +693,9 @@ app.post('/admin/project/:project/delete', aclAdmin, (req, res) => {
   });
 });
 
-
 app.post('/admin/project/:project/gitgc', aclAdmin, async (req, res) => {
   const g = git(PROJECTS_FOLDER + '/' + req.params.project);
-  const data = await g.raw([
-    'gc',
-    '--aggressive',
-  ]);
+  const data = await g.raw(['gc', '--aggressive']);
   res.json(data);
 });
 
@@ -2981,6 +2977,89 @@ app.get('/project/:project/zip/annotate', aclProject, (req, res) => {
   zip.file(APP_FOLDER + '/assets/print.bat', {name: 'print.bat.txt'});
   zip.finalize();
 });
+
+function mergePdfs(
+  project: string,
+  correctionsFolder: string,
+  destinationFile: string
+) {
+  const params = [
+    '-c',
+    `find ${correctionsFolder} -type f -name '*.pdf' -print0 | xargs -0 gs -q -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -sOUTPUTFILE=${destinationFile}`,
+  ];
+  const cwd = `${PROJECTS_FOLDER}/${project}/cr/corrections`;
+  return new Promise((resolve, reject) => {
+    const ps = childProcess.spawn('sh', params, {cwd});
+
+    ps.on('close', (code: number) => {
+      if (code !== 0) {
+        reject(`mergepdf process exited with code ${code}`);
+      } else {
+        resolve(destinationFile);
+      }
+    });
+  });
+}
+
+app.get(
+  '/project/:project/merged/all',
+  aclProject,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      await mergePdfs(req.params.project, 'pdf', 'combined_all.pdf');
+      res.sendFile(`${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_all.pdf`);
+    } catch (err) {
+      console.log(err);
+      res.sendStatus(500);
+    }
+  }
+);
+
+function extractFirstPage(project: string) {
+  const params = [
+    '-c',
+    `for file in *.pdf; do gs -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -dFirstPage=1 -dLastPage=1 -sOutputFile="../pdf_firstpage/$file" "$file"; done`,
+  ];
+  const cwd = `${PROJECTS_FOLDER}/${project}/cr/corrections/pdf`;
+  return new Promise((resolve, reject) => {
+    const ps = childProcess.spawn('sh', params, {cwd});
+
+    ps.on('close', (code: number) => {
+      if (code !== 0) {
+        reject(`extractpdf process exited with code ${code}`);
+      } else {
+        resolve('done');
+      }
+    });
+  });
+}
+
+app.get(
+  '/project/:project/merged/firstpage',
+  aclProject,
+  (req: express.Request, res: express.Response) => {
+    fs.rmdir(
+      `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`,
+      {recursive: true, force: true},
+      (err) => {
+        fs.mkdir(
+          `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`,
+          async (err) => {
+            try {
+              await extractFirstPage(req.params.project);
+              await mergePdfs(req.params.project, 'pdf_firstpage', 'combined_firstpage.pdf');
+              res.sendFile(`${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_firstpage.pdf`);
+            } catch (err) {
+              console.log(err);
+              res.sendStatus(500);
+            }
+          }
+        );
+      }
+    );
+  }
+);
+
 /*
 
 scoring_score

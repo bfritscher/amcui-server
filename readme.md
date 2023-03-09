@@ -9,7 +9,7 @@ docker-compose up
 ```
 This will create the frontend/dist/spa folder
 
-### backned
+### backend
 create and configure .env file
 ```
 NODE_ENV=development|production
