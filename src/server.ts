@@ -3007,7 +3007,9 @@ app.get(
   async (req: express.Request, res: express.Response) => {
     try {
       await mergePdfs(req.params.project, 'pdf', 'combined_all.pdf');
-      res.sendFile(`${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_all.pdf`);
+      res.sendFile(
+        `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_all.pdf`
+      );
     } catch (err) {
       console.log(err);
       res.sendStatus(500);
@@ -3037,26 +3039,28 @@ function extractFirstPage(project: string) {
 app.get(
   '/project/:project/merged/firstpage',
   aclProject,
-  (req: express.Request, res: express.Response) => {
-    fs.rmdir(
-      `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`,
-      {recursive: true, force: true},
-      (err) => {
-        fs.mkdir(
-          `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`,
-          async (err) => {
-            try {
-              await extractFirstPage(req.params.project);
-              await mergePdfs(req.params.project, 'pdf_firstpage', 'combined_firstpage.pdf');
-              res.sendFile(`${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_firstpage.pdf`);
-            } catch (err) {
-              console.log(err);
-              res.sendStatus(500);
-            }
-          }
-        );
-      }
-    );
+  async (req: express.Request, res: express.Response) => {
+    try {
+      fs.rmSync(
+        `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`,
+        {recursive: true, force: true}
+      );
+      fs.mkdirSync(
+        `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/pdf_firstpage`
+      );
+      await extractFirstPage(req.params.project);
+      await mergePdfs(
+        req.params.project,
+        'pdf_firstpage',
+        'combined_firstpage.pdf'
+      );
+      res.sendFile(
+        `${PROJECTS_FOLDER}/${req.params.project}/cr/corrections/combined_firstpage.pdf`
+      );
+    } catch (err) {
+      console.log(err);
+      res.sendStatus(500);
+    }
   }
 );
 
