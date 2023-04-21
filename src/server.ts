@@ -2985,7 +2985,7 @@ function mergePdfs(
 ) {
   const params = [
     '-c',
-    `find ${correctionsFolder} -type f -name '*.pdf' -print0 | xargs -0 gs -q -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -sOUTPUTFILE=${destinationFile}`,
+    `find ${correctionsFolder} -type f -name '*.pdf' -print0 | sort -z | xargs -0 gs -q -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -sOUTPUTFILE=${destinationFile}`,
   ];
   const cwd = `${PROJECTS_FOLDER}/${project}/cr/corrections`;
   return new Promise((resolve, reject) => {
