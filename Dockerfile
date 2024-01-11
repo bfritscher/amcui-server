@@ -3,6 +3,7 @@ LABEL org.opencontainers.image.source=https://github.com/bfritscher/amcui-server
 RUN apt-get update && apt-get install -y \
     auto-multiple-choice \
     graphicsmagick \
+    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 RUN sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml
 RUN git config --global user.email "root@amcui.ig.he-arc.ch"
