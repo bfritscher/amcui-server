@@ -27,3 +27,10 @@ docker-compose -f docker-compose.production.yml pull
 docker-compose -f docker-compose.production.yml build
 docker-compose -f docker-compose.production.yml up -d
 ```
+
+
+### dependencies
+
+acl2 <4 needs rewrite into promise callback support removed
+redis <4 api changed...
+

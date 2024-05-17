@@ -1,3 +1,11 @@
+import * as Sentry from '@sentry/node';
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 1.0,
+  });
+}
+
 import fs from 'fs-extra';
 import StreamSplitter from 'stream-splitter';
 import cors from 'cors';
@@ -9,16 +17,16 @@ import sqlite3 from 'sqlite3';
 import path from 'path';
 import jwt from 'jsonwebtoken';
 import {authorize} from '@thream/socketio-jwt';
-import expressJwt from 'express-jwt';
+import { expressjwt, Request as JWTRequest } from 'express-jwt';
 import bcrypt from 'bcrypt';
 import redis from 'redis';
 import xml2js from 'xml2js';
-import mkdirp from 'mkdirp';
+import { mkdirp } from 'mkdirp';
 import ACL from 'acl2';
 import multer from 'multer';
 import tmp from 'tmp';
 import childProcess from 'child_process';
-import git from 'simple-git';
+import { simpleGit } from 'simple-git';
 import archiver from 'archiver';
 import slug from 'slug';
 import sizeOf from 'image-size';
@@ -31,8 +39,7 @@ import QRCode from 'qrcode';
 import {Factor, Fido2Lib} from 'fido2-lib';
 import * as base64buffer from 'base64-arraybuffer';
 
-import * as Sentry from '@sentry/node';
-import * as Tracing from '@sentry/tracing';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -52,6 +59,9 @@ if (!process.env.JWT_SECRET) {
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
+    interface Request {
+        user?: User;
+    }
     interface User {
       username: string;
     }
@@ -59,22 +69,7 @@ declare global {
 }
 
 const app = express();
-
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    integrations: [
-      // enable HTTP calls tracing
-      new Sentry.Integrations.Http({tracing: true}),
-      // enable Express.js middleware tracing
-      new Tracing.Integrations.Express({
-        // to trace all requests to the default router
-        app,
-      }),
-    ],
-    tracesSampleRate: 1.0,
-  });
-}
+Sentry.setupExpressErrorHandler(app);
 
 const APP_FOLDER = path.resolve(__dirname, '../src/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
@@ -98,9 +93,6 @@ function addProjectAcl(project: string, username: string | undefined): void {
   //user, role
   acl.addUserRoles(username, project);
 }
-
-app.use(Sentry.Handlers.requestHandler());
-app.use(Sentry.Handlers.tracingHandler());
 
 const corsOptions: cors.CorsOptions = {
   origin: true,
@@ -227,7 +219,7 @@ app.use(function (req, _res, next) {
   }
 });
 
-const secure = expressJwt({
+const secureJwt = expressjwt({
   secret: process.env.JWT_SECRET,
   algorithms: ['HS256'],
   getToken: function fromHeaderOrQuerystring(req) {
@@ -237,11 +229,26 @@ const secure = expressJwt({
     ) {
       return req.headers.authorization.split(' ')[1];
     } else if (req.query && req.query.token) {
-      return req.query.token;
+      return String(req.query.token);
     }
-    return null;
+    return;
   },
 });
+
+
+// map auth to user because of migration from 6 to 8 of express-jwt
+const secure = (req: JWTRequest, res: express.Response, next: express.NextFunction) => {
+  secureJwt(req, res, (err) => {
+    if (err) {
+      return next(err);
+    }
+    if (req.auth) {
+      req.user = req.auth as any;
+    }
+    next();
+  });
+};
+
 //secure /project with auth api
 app.use('/project', secure);
 app.use('/admin', secure);
@@ -292,6 +299,7 @@ function database(
     PROJECTS_FOLDER + '/' + project + '/data/capture.sqlite',
     (err) => {
       if (err) {
+        console.log(err);
         res.status(500).end(JSON.stringify(err));
         return;
       }
@@ -327,6 +335,7 @@ function database(
                       rows: any[]
                     ): void => {
                       if (err) {
+                        console.log(err);
                         res.status(500).end(JSON.stringify(err));
                         return;
                       }
@@ -510,7 +519,7 @@ async function countGitCommits(
     return -1;
   }
   try {
-    const g = git(PROJECTS_FOLDER + '/' + project);
+    const g = simpleGit(PROJECTS_FOLDER + '/' + project);
     const data = await g.raw(['rev-list', '--count', branch]);
     return Number(data.trim());
   } catch (err) {
@@ -694,7 +703,7 @@ app.post('/admin/project/:project/delete', aclAdmin, (req, res) => {
 });
 
 app.post('/admin/project/:project/gitgc', aclAdmin, async (req, res) => {
-  const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+  const g = simpleGit(PROJECTS_FOLDER + '/' + req.params.project);
   const data = await g.raw(['gc', '--aggressive']);
   res.json(data);
 });
@@ -1205,14 +1214,16 @@ function createProject(
   }
 }
 
+function ignoreGitError() {}
+
 async function commitGit(
   project: string,
   username: string,
   message: string
 ): Promise<void> {
-  const g = git(PROJECTS_FOLDER + '/' + project);
-  await g.init().catch();
-  await g.raw(['add', '--all', '.'], (err: Error | null) => {
+  const g = simpleGit(PROJECTS_FOLDER + '/' + project);
+  await g.init().catch(ignoreGitError);
+  await g.raw(['add', '--all', '.']).catch((err: Error | null) => {
     if (err) {
       console.log('add', err);
       Sentry.captureException(err);
@@ -1225,13 +1236,12 @@ async function commitGit(
       '-m',
       message,
     ],
-    (err: Error | null) => {
-      if (err) {
-        console.log('commit', err);
-        Sentry.captureException(err);
-      }
+  ).catch((err: Error | null) => {
+    if (err) {
+      console.log('commit', err);
+      Sentry.captureException(err);
     }
-  );
+  });
 }
 
 app.post('/project/create', (req, res) => {
@@ -1412,6 +1422,7 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
 
   fs.rename(PROJECTS_FOLDER + '/' + project, newPath, (err) => {
     if (err) {
+      console.log(err);
       return res.status(500).send(err);
     }
     redisClient.renamenx('exam:' + project, 'exam:' + newProject);
@@ -1487,7 +1498,7 @@ flag as archive
 app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
   //use cI when git version supports it
   try {
-    const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+    const g = simpleGit(PROJECTS_FOLDER + '/' + req.params.project);
     const data = await g.raw([
       'log',
       '--walk-reflogs',
@@ -1511,12 +1522,13 @@ app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
     }
     res.json(logs);
   } catch (err) {
+    console.log(err);
     res.status(500).send(err);
   }
 });
 
 app.post('/project/:project/revert', aclProject, (req, res) => {
-  const g = git(PROJECTS_FOLDER + '/' + req.params.project);
+  const g = simpleGit(PROJECTS_FOLDER + '/' + req.params.project);
   g.raw(['reset', '--hard', req.body.sha], (err: Error | null) => {
     if (err) {
       Sentry.captureException(err);
@@ -2128,7 +2140,7 @@ app.get('/project/:project/missing', aclProject, (req, res) => {
       'SELECT a.student as student, a.page as page, a.copy as copy, ok.page IS NULL as missing ' +
       'FROM (SELECT enter.student, enter.page, p.copy FROM ( ' +
       '    SELECT student, page ' +
-      '    FROM layout_namefield ' +
+      '    FROM layout_zone WHERE zone="__n"' +
       '    UNION ' +
       '    SELECT student, page ' +
       '    FROM layout_box) enter, ' +
@@ -2511,7 +2523,7 @@ app.post('/project/:project/csv', aclProject, (req, res) => {
     PROJECTS_FOLDER,
     req.params.project + '/students.csv'
   );
-  fs.writeFile(filename, req.body, function (err) {
+  fs.writeFile(filename, req.body, function (err:any) {
     if (err) {
       res.sendStatus(500).end();
       return;
@@ -2601,7 +2613,7 @@ app.get('/project/:project/names', aclProject, (req, res) => {
   database(req, res, (db) => {
     const query =
       'SELECT p.student, p.page, p.copy, z.image, a.manual, a.auto ' +
-      'FROM capture_page p JOIN layout.layout_namefield l ON p.student=l.student AND p.page = l.page ' +
+      'FROM capture_page p JOIN layout.layout_zone l ON p.student=l.student AND p.page = l.page AND l.zone="__n"' +
       'LEFT JOIN capture_zone z ON z.type = 2 AND z.student = p.student AND z.page = p.page AND z.copy = p.copy ' +
       'LEFT JOIN assoc.association_association a ON a.student = p.student AND a.copy = p.copy';
 
@@ -2923,7 +2935,7 @@ REPORT_ANONYMIZED_PDF       => 4,
                     db.all(
                       'SELECT file FROM report_student WHERE student=$student AND copy=$copy AND type=1',
                       {$student: student, $copy: copy},
-                      (_err, rows) => {
+                      (_err, rows:any[]) => {
                         let filename = undefined;
                         if (rows && rows.length > 0) {
                           filename = 'cr/corrections/pdf/' + rows[0].file;
@@ -3178,17 +3190,18 @@ app.use(
       return next();
     }
     // Something is wrong, inform user
-    if (err.errorCode && err.msg) {
-      console.log('custom_error_handler:', err.errorCode, err.msg);
-      res.status(err.errorCode).json(err.msg);
+    if (err.errorCode && err.message) {
+      res.status(err.errorCode).json(err.message);
+    }
+    else if (err.status && err.name) {
+      res.status(err.status).json(err.name);
     } else {
       console.log('custom_error_handler_skip:', err);
+      console.log(Object.keys(err));
       next(err);
     }
   }
 );
-
-app.use(Sentry.Handlers.errorHandler());
 
 if (env === 'development') {
   app.use(errorHandler({log: true}));

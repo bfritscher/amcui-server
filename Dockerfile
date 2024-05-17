@@ -1,4 +1,4 @@
-FROM node:16-bullseye
+FROM node:20-bookworm
 LABEL org.opencontainers.image.source=https://github.com/bfritscher/amcui-server
 RUN apt-get update && apt-get install -y \
     auto-multiple-choice \

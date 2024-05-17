@@ -20,5 +20,8 @@
     "moduleTypes": {
       "jest.config.ts": "cjs"
     }
+  },
+  "watchOptions": {
+    "watchFile": "dynamicPriorityPolling"
   }
 }
