@@ -30,15 +30,16 @@ import { simpleGit } from 'simple-git';
 import archiver from 'archiver';
 import slug from 'slug';
 import sizeOf from 'image-size';
-import diffSync from 'diffsync';
-import redisDataAdapter from './diffsyncredis.js';
 import {fileURLToPath} from 'url';
 import {dirname} from 'path';
 import {authenticator} from 'otplib';
 import QRCode from 'qrcode';
 import {Factor, Fido2Lib} from 'fido2-lib';
 import * as base64buffer from 'base64-arraybuffer';
-
+import { WebSocketServer } from 'ws'
+// import * as Y from "yjs";
+import { URL } from "url";
+import ywsUtils from "y-websocket/bin/utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -116,20 +117,86 @@ ws.use(
   })
 );
 
+// yjs websocket server config
+/*
+const provider = {
+  async retrieveDoc(docName: string) {
+    try {
+      const safeDocName = docName.replace(/[^a-z0-9]/gi, "_");
+      const filePath = path.join(`${safeDocName}.bin`);
+      return await fs.readFile(filePath);
+    } catch (error) {
+      return null;
+    }
+  },
+  async persistDoc(docName: string, ydoc: Y.Doc) {
+    const state = Y.encodeStateAsUpdateV2(ydoc);
+    try {
+      const safeDocName = docName.replace(/[^a-z0-9]/gi, "_");
+      const filePath = path.join(`${safeDocName}.bin`);
+      await fs.writeFile(filePath, state);
+      console.log(`Document ${safeDocName} saved successfully.`);
+    } catch (error) {
+      console.error(`Error saving document ${docName}:`, error);
+    }
+  },
+};
+*/
+// TODO:
+// import from json file
+// add redis?
+// auth check
+/* TODO add redis
+ywsUtils.setPersistence({
+  provider,
+  bindState: async (docName, ydoc) => {
+    const persistedYdoc = await provider.retrieveDoc(docName);
+    if (persistedYdoc) {
+      Y.applyUpdateV2(ydoc, persistedYdoc);
+    }
+    ydoc.on("update", (_update, _origin, doc) => {
+      provider.persistDoc(docName, doc);
+    });
+  },
+  writeState: async (_docName, _ydoc) => {},
+});
+*/
+
+/* check initial doc here or in persistence or on client?
+ywsUtils.setContentInitializor(async (ydoc: Y.Doc) => {
+  // ydoc as WSSharedDoc
+  console.log("Initializing content", ydoc);
+});
+*/
+
+const wss = new WebSocketServer({ noServer: true });
+
+wss.on("connection", ywsUtils.setupWSConnection);
+
+httpServer.on("upgrade", (request, socket, head) => {
+  // You may check auth of request here..
+  // Call `wss.HandleUpgrade` *after* you checked whether the client has access
+  // (e.g. by checking cookies, or url parameters).
+  // See https://github.com/websockets/ws#client-authentication
+  // Parse the request URL
+  const requestUrl = new URL(request.url || '', `wss://${request.headers.host}`);
+  if (requestUrl.pathname.startsWith("/ws")) {
+    // Get the access_token parameter
+    const accessToken = requestUrl.searchParams.get("access_token");
+    // TODO: implement auth here?
+    console.log("TODO check", accessToken);
+    wss.handleUpgrade(
+      request,
+      socket,
+      head,
+      (ws) => {
+        wss.emit("connection", ws, request);
+      }
+    );
+  }
+});
+
 const uploadMiddleware = multer({dest: '/tmp/amcui-uploads/'});
-
-//in memory rooms users list
-interface SocketRef {
-  [key: string]: {
-    id: string;
-    username: string;
-  };
-}
-interface RoomsLookup {
-  [key: string]: SocketRef;
-}
-
-const rooms: RoomsLookup = {};
 
 function userSaveVisit(username: string, projectName: string): void {
   redisClient.zadd(
@@ -151,51 +218,10 @@ ws.on('connection', (socket) => {
       } else {
         userSaveVisit(username, project);
         socket.join(project + '-notifications');
-        socket.on('disconnect', function () {
-          delete rooms[project][socket.id];
-          ws.to(project + '-notifications').emit('user:disconnected', {
-            id: socket.id,
-            username: username,
-          });
-        });
-
-        if (!rooms.hasOwnProperty(project)) {
-          rooms[project] = {};
-        }
-        socket.emit('user:online', rooms[project]);
-        rooms[project][socket.id] = {id: socket.id, username: username};
-        ws.to(project + '-notifications').emit('user:connected', {
-          id: socket.id,
-          username: username,
-        });
-      }
-    });
-  });
-
-  socket.on('diffsync-join', (data) => {
-    acl.hasRole(username, data, (_err, hasRole) => {
-      if (!hasRole) {
-        socket.disconnect(true);
-      }
-    });
-  });
-
-  socket.on('diffsync-send-edit', (data) => {
-    let room = data;
-    if (data.hasOwnProperty('room')) {
-      room = data.room;
-    }
-    acl.hasRole(username, room, (_err, hasRole) => {
-      if (!hasRole) {
-        socket.disconnect(true);
       }
     });
   });
 });
-
-const dataAdapter = new redisDataAdapter(redisClient, 'exam');
-const diffSyncServer = new diffSync.Server(dataAdapter, ws);
-console.log('diffSyncServer started', diffSyncServer.adapter.namespace);
 
 const env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
