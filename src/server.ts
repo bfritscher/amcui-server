@@ -516,6 +516,10 @@ app.get('/admin/stats', aclAdmin, async (_req, res) => {
   exams.forEach((name: string) => {
     roles.add(name.split(':')[1]);
   });
+  const exams2 = await redisClient.KEYS('exam2:*');
+  exams2.forEach((name: string) => {
+    roles.add(name.split(':')[1]);
+  });
   const projects = await redisClient.KEYS('project:*');
   projects.forEach((name: string) => {
     roles.add(name.split(':')[1]);
@@ -546,6 +550,7 @@ app.get('/admin/stats', aclAdmin, async (_req, res) => {
       const p = {
         students: undefined as undefined | number,
         commits: undefined as undefined | number,
+        v2: exams2.includes('exam2:' + project),
       };
       stats.projects[project] = p;
       p.commits = await countGitCommits(project);
@@ -1225,16 +1230,17 @@ app.post('/project/:project/copy/project', aclProject, (req, res) => {
           if (err) {
             res.status(500).send('Failed to copy src files.');
           } else {
-            try {
-              const result = await redisClient.GET('exam:' + src);
-              if (!result) {
-                return res.status(500).send('Failed to copy data.');
+            fs.copy(
+              PROJECTS_FOLDER + '/' + src + '/data.json',
+              PROJECTS_FOLDER + '/' + dest + '/data.json',
+              async (err) => {
+                if (err) {
+                  res.status(500).send('Failed to copy src files.');
+                } else {
+                  res.sendStatus(200);
+                }
               }
-              await redisClient.SET('exam:' + dest, result);
-              res.sendStatus(200);
-            } catch (e) {
-              res.status(500).send('Failed to copy data.');
-            }
+            );
           }
         }
       );
@@ -1323,7 +1329,12 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
       console.log(err);
       return res.status(500).send(err);
     }
-    await redisClient.RENAMENX('exam:' + project, 'exam:' + newProject);
+    if (await redisClient.EXISTS('exam:' + project) > 0) {
+      await redisClient.RENAMENX('exam:' + project, 'exam:' + newProject);
+    }
+    if (await redisClient.EXISTS('exam2:' + project) > 0) {
+      await redisClient.RENAMENX('exam2:' + project, 'exam2:' + newProject);
+    }
     await acl.allow(newProject, '/project/' + newProject, 'admin');
     const users = await acl.roleUsers(project);
     users.forEach(async (username: string) => {
@@ -1364,7 +1375,7 @@ async function deleteProject(
   await acl.removeAllow(project, '/project/' + project, 'admin');
   await acl.removeRole(project);
   await acl.removeResource(project);
-  await redisClient.DEL('exam:' + project);
+  await redisClient.DEL(['exam:' + project, 'exam2:' + project]);
   const keys = await redisClient.KEYS('project:' + project + ':*');
   keys.forEach((key) => {
     redisClient.DEL(key);
