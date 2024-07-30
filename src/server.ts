@@ -37,9 +37,10 @@ import QRCode from 'qrcode';
 import {Factor, Fido2Lib} from 'fido2-lib';
 import * as base64buffer from 'base64-arraybuffer';
 import {WebSocketServer} from 'ws';
-// import * as Y from "yjs";
+
 import {URL} from 'url';
 import ywsUtils from 'y-websocket/bin/utils';
+import {ywsRedisPersistence} from './ywspersistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -76,13 +77,13 @@ const APP_FOLDER = path.resolve(__dirname, '../src/');
 const PROJECTS_FOLDER = path.resolve(__dirname, '../projects/');
 const TEMPLATES_FOLDER = path.resolve(__dirname, '../templates/');
 
-const redisClient = await createClient({socket: {port: 6379, host: 'redis'}})
-.on('error', (err) => {
-  console.log('Redis error ' + err);
-  Sentry.captureException(err);
-})
-.connect();
-const acl = new ACL(new ACL.redisBackend({redis: redisClient as RedisClientType, prefix: 'acl'}));
+const redisClient = (await createClient({socket: {port: 6379, host: 'redis'}})
+  .on('error', (err) => {
+    console.log('Redis error ' + err);
+    Sentry.captureException(err);
+  })
+  .connect()) as RedisClientType;
+const acl = new ACL(new ACL.redisBackend({redis: redisClient, prefix: 'acl'}));
 
 const f2l = new Fido2Lib({
   rpName: 'AMCUI',
@@ -118,57 +119,8 @@ ws.use(
   })
 );
 
-// yjs websocket server config
-/*
-const provider = {
-  async retrieveDoc(docName: string) {
-    try {
-      const safeDocName = docName.replace(/[^a-z0-9]/gi, "_");
-      const filePath = path.join(`${safeDocName}.bin`);
-      return await fs.readFile(filePath);
-    } catch (error) {
-      return null;
-    }
-  },
-  async persistDoc(docName: string, ydoc: Y.Doc) {
-    const state = Y.encodeStateAsUpdateV2(ydoc);
-    try {
-      const safeDocName = docName.replace(/[^a-z0-9]/gi, "_");
-      const filePath = path.join(`${safeDocName}.bin`);
-      await fs.writeFile(filePath, state);
-      console.log(`Document ${safeDocName} saved successfully.`);
-    } catch (error) {
-      console.error(`Error saving document ${docName}:`, error);
-    }
-  },
-};
-*/
-// TODO:
-// import from json file
-// add redis?
-// auth check
-/* TODO add redis
-ywsUtils.setPersistence({
-  provider,
-  bindState: async (docName, ydoc) => {
-    const persistedYdoc = await provider.retrieveDoc(docName);
-    if (persistedYdoc) {
-      Y.applyUpdateV2(ydoc, persistedYdoc);
-    }
-    ydoc.on("update", (_update, _origin, doc) => {
-      provider.persistDoc(docName, doc);
-    });
-  },
-  writeState: async (_docName, _ydoc) => {},
-});
-*/
-
-/* check initial doc here or in persistence or on client?
-ywsUtils.setContentInitializor(async (ydoc: Y.Doc) => {
-  // ydoc as WSSharedDoc
-  console.log("Initializing content", ydoc);
-});
-*/
+// setup y-websocket
+ywsRedisPersistence(redisClient, 'exam2', 'ws/');
 
 const wss = new WebSocketServer({noServer: true});
 
@@ -1229,6 +1181,21 @@ app.post('/project/:project/options', aclProject, (req, res) => {
       commitGit(req.params.project, req.user?.username || '', 'options');
       res.sendStatus(200);
     }
+  });
+});
+
+app.get('/project/:project/dbversions', aclProject, (req, res) => {
+  database(req, res, (db) => {
+    db(
+      'get',
+      `SELECT (SELECT value FROM capture_variables WHERE name = 'version') capture,
+              (SELECT value FROM layout_variables WHERE name = 'version') layout,
+              (SELECT value FROM association_variables WHERE name = 'version') association,
+              (SELECT value FROM scoring_variables WHERE name = 'version') scoring`,
+      (rows) => {
+        res.json(rows);
+      }
+    );
   });
 });
 
