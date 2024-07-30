@@ -9,10 +9,8 @@
 declare module 'acl2' {
 
     import http = require('http');
-    import Promise = require('bluebird');
     import express = require('express');
     import redis = require('redis');
-    import mongo = require('mongodb');
 
     export = AclStatic;
 
@@ -37,7 +35,7 @@ declare module 'acl2' {
             options?: AclStatic.Option
         ): AclStatic.Acl;
         readonly memoryBackend: AclStatic.MemoryBackendStatic;
-        readonly mongodbBackend: AclStatic.MongodbBackendStatic;
+        // readonly mongodbBackend: AclStatic.MongodbBackendStatic;
         readonly redisBackend: AclStatic.RedisBackendStatic;
     }
 
@@ -219,15 +217,16 @@ declare module 'acl2' {
         }
 
         // for redis backend
-        interface RedisBackend extends Backend<redis.RedisClient> {}
+        interface RedisBackend extends Backend<redis.RedisClientType> {}
         interface RedisBackendStatic {
             new (options: {
-                redis: redis.RedisClient;
+                redis: redis.RedisClientType;
                 prefix?: string;
             }): RedisBackend;
         }
 
         // for mongodb backend
+        /*
         interface MongodbBackend extends Backend<Callback> {}
         interface MongodbBackendStatic {
             new (options: {
@@ -236,5 +235,6 @@ declare module 'acl2' {
                 useSingle?: boolean;
             }): MongodbBackend;
         }
+            */
     }
 }

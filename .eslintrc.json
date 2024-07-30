@@ -15,5 +15,6 @@
       "@typescript-eslint/eslint-plugin"
     ],
     "rules": {
+      "@typescript-eslint/no-explicit-any": "off"
     }
   }
