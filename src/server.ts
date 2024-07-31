@@ -126,7 +126,7 @@ const wss = new WebSocketServer({noServer: true});
 
 wss.on('connection', ywsUtils.setupWSConnection);
 
-httpServer.on('upgrade', (request, socket, head) => {
+httpServer.on('upgrade', async (request, socket, head) => {
   // You may check auth of request here..
   // Call `wss.HandleUpgrade` *after* you checked whether the client has access
   // (e.g. by checking cookies, or url parameters).
@@ -137,13 +137,19 @@ httpServer.on('upgrade', (request, socket, head) => {
     `wss://${request.headers.host}`
   );
   if (requestUrl.pathname.startsWith('/ws')) {
-    // Get the access_token parameter
+    const projectName = requestUrl.pathname.split('/')[2];
     const accessToken = requestUrl.searchParams.get('access_token');
-    // TODO: implement auth here?
-    console.log('TODO check', accessToken);
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
+    if (accessToken) {
+      const decodedToken = jwt.verify(accessToken, process.env.JWT_SECRET || '') as {username: string};
+      if (decodedToken && await acl.hasRole(decodedToken.username, projectName)) {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+        return;
+      }
+    }
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
   }
 });
 
@@ -1476,7 +1482,7 @@ app.get('/project/:project/static/:file*', aclProject, (req, res) => {
       if (err && file.split('.').splice(-1)[0] === 'jpg') {
         res.sendFile(APP_FOLDER + '/assets/image_not_found.jpg');
       } else if (err) {
-        res.end('NOT_FOUND');
+        res.sendStatus(404);
       }
     }
   );
