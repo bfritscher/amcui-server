@@ -40,7 +40,6 @@ import {WebSocketServer} from 'ws';
 
 import {URL} from 'url';
 import ywsUtils from 'y-websocket/bin/utils';
-import {ywsRedisPersistence} from './ywspersistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -119,9 +118,6 @@ ws.use(
   })
 );
 
-// setup y-websocket
-ywsRedisPersistence(redisClient, 'exam2', 'ws/');
-
 const wss = new WebSocketServer({noServer: true});
 
 wss.on('connection', ywsUtils.setupWSConnection);
@@ -140,12 +136,22 @@ httpServer.on('upgrade', async (request, socket, head) => {
     const projectName = requestUrl.pathname.split('/')[2];
     const accessToken = requestUrl.searchParams.get('access_token');
     if (accessToken) {
-      const decodedToken = jwt.verify(accessToken, process.env.JWT_SECRET || '') as {username: string};
-      if (decodedToken && await acl.hasRole(decodedToken.username, projectName)) {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-          wss.emit('connection', ws, request);
-        });
-        return;
+      try {
+        const decodedToken = jwt.verify(
+          accessToken,
+          process.env.JWT_SECRET || ''
+        ) as {username: string};
+        if (
+          decodedToken &&
+          (await acl.hasRole(decodedToken.username, projectName))
+        ) {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+          });
+          return;
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
@@ -522,10 +528,6 @@ app.get('/admin/stats', aclAdmin, async (_req, res) => {
   exams.forEach((name: string) => {
     roles.add(name.split(':')[1]);
   });
-  const exams2 = await redisClient.KEYS('exam2:*');
-  exams2.forEach((name: string) => {
-    roles.add(name.split(':')[1]);
-  });
   const projects = await redisClient.KEYS('project:*');
   projects.forEach((name: string) => {
     roles.add(name.split(':')[1]);
@@ -556,7 +558,7 @@ app.get('/admin/stats', aclAdmin, async (_req, res) => {
       const p = {
         students: undefined as undefined | number,
         commits: undefined as undefined | number,
-        v2: exams2.includes('exam2:' + project),
+        v2: false, //TODO check if v2?
       };
       stats.projects[project] = p;
       p.commits = await countGitCommits(project);
@@ -1335,11 +1337,8 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
       console.log(err);
       return res.status(500).send(err);
     }
-    if (await redisClient.EXISTS('exam:' + project) > 0) {
+    if ((await redisClient.EXISTS('exam:' + project)) > 0) {
       await redisClient.RENAMENX('exam:' + project, 'exam:' + newProject);
-    }
-    if (await redisClient.EXISTS('exam2:' + project) > 0) {
-      await redisClient.RENAMENX('exam2:' + project, 'exam2:' + newProject);
     }
     await acl.allow(newProject, '/project/' + newProject, 'admin');
     const users = await acl.roleUsers(project);
@@ -1381,7 +1380,7 @@ async function deleteProject(
   await acl.removeAllow(project, '/project/' + project, 'admin');
   await acl.removeRole(project);
   await acl.removeResource(project);
-  await redisClient.DEL(['exam:' + project, 'exam2:' + project]);
+  await redisClient.DEL(['exam:' + project]);
   const keys = await redisClient.KEYS('project:' + project + ':*');
   keys.forEach((key) => {
     redisClient.DEL(key);

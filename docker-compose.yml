@@ -20,6 +20,7 @@ services:
     command: npm run dev
     working_dir: /amc
     volumes:
+      - ./data/db:/data/db
       - ./src:/amc/src
       - ./projects:/amc/projects
       - ./templates:/amc/templates
