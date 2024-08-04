@@ -1495,14 +1495,14 @@ function makeThumb(
 ): void {
   const GRAPHICS_FOLDER = PROJECTS_FOLDER + '/' + project + '/src/graphics/';
   const convert = childProcess.spawn(
-    'convert',
+    'gm',
     [
+      'convert',
       '-trim',
       '+repage',
       '-background',
       'white',
-      '-alpha',
-      'remove',
+      '+matte',
       '-density',
       '120',
       filename + '[0]',
