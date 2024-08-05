@@ -5,7 +5,8 @@
   \usepackage[francais,lang=FR]{automultiplechoice}
   \usepackage{fp}
   \usepackage{array}
-  \usepackage{tabularx}
+  \usepackage{soul}
+  \usepackage{tabulary}
   \usepackage{multirow}
   \usepackage{multicol}
   \usepackage{enumitem}
@@ -57,7 +58,7 @@
      {œ}{{\oe}}1  {Œ}{{\OE}}1  {æ}{{\ae}}1 {Æ}{{\AE}}1  {ß}{{\ss}}1
      {ç}{{\c c}}1 {Ç}{{\c C}}1 {ø}{{\o}}1  {Ø}{{\O}}1   {å}{{\r a}}1
      {Å}{{\r A}}1 {ã}{{\~a}}1  {õ}{{\~o}}1 {Ã}{{\~A}}1  {Õ}{{\~O}}1
-     {ñ}{{\~n}}1  {Ñ}{{\~N}}1  {¿}{{?`}}1  {¡}{{!`}}1
+     {ñ}{{\~n}}1  {Ñ}{{\~N}}1  {¿}{{?`}}1  {¡}{{!`}}1   { }{{ }}1
      {°}{{\textdegree}}1 {º}{{\textordmasculine}}1 {ª}{{\textordfeminine}}1,
      basicstyle=\footnotesize\ttfamily,
      showstringspaces=false,
@@ -115,20 +116,20 @@
     \vspace*{2cm}
 
     {\renewcommand{\arraystretch}{4}
-    \begin{tabularx}{15cm}{@{}p{6cm}p{0.5cm}p{7cm}@{}}
+    \begin{tabulary}{15cm}{@{}p{6cm}p{0.5cm}p{7cm}@{}}
     \underline{Unité de cours} & : & \textbf{\AMCUIcourse}    \\
     \underline{Cotation utilisée pour la correction} & : & \textbf{\AMCUIpoints} \\
     \underline{Consignes} & : & Ne répondez que sur la feuille de réponses! Aucune autre réponse ne sera prise en compte. Bon travail \\
-    \end{tabularx}
+    \end{tabulary}
     }
 
     \vspace*{2cm}
 
     {\renewcommand{\arraystretch}{0}
-    \begin{tabularx}{15cm}{@{}p{6cm}p{0.1cm}@{}p{7.4cm}}
+    \begin{tabulary}{15cm}{@{}p{6cm}p{0.1cm}@{}p{7.4cm}}
     \hline
     \vspace{15pt}\underline{Nom et prénom de l'étudiant-e} & \vspace{18pt}: & \champnom{{\begin{minipage}[t][1.5cm][c]{8.3cm}\hfill{}\end{minipage}}} \\ \hline
-    \end{tabularx}
+    \end{tabulary}
     }
 
 
