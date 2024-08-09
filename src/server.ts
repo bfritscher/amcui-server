@@ -37,6 +37,7 @@ import QRCode from 'qrcode';
 import {Factor, Fido2Lib} from 'fido2-lib';
 import * as base64buffer from 'base64-arraybuffer';
 import {WebSocketServer} from 'ws';
+import fetch from 'node-fetch';
 
 import {URL} from 'url';
 import ywsUtils from 'y-websocket/bin/utils';
@@ -1524,16 +1525,49 @@ app.post(
   '/project/:project/upload/graphics',
   aclProject,
   uploadMiddleware.single('file'),
-  (req, res) => {
-    if (!req.file) return res.sendStatus(500);
+  async (req, res) => {
+    if (!req.file) {
+      console.log('No file received');
+      return res.sendStatus(500);
+    }
+    console.log('File received', req.file.originalname);
     const GRAPHICS_FOLDER =
       PROJECTS_FOLDER + '/' + req.params.project + '/src/graphics/';
-    //keep extension
-    const filename =
-      req.body.id + '.' + req.file.originalname.split('.').splice(-1)[0];
-    fs.copySync(req.file.path, GRAPHICS_FOLDER + filename);
-    // don't forget to delete all req.files when done
-    fs.unlinkSync(req.file.path);
+    const extension = req.file.originalname.split('.').splice(-1)[0];
+    const supported = ['jpg', 'jpeg', 'png', 'svg', 'pdf'];
+    if (!supported.includes(extension)) {
+      return res.sendStatus(415);
+    }
+    let filename: string;
+    try {
+      if (extension === 'svg') {
+        const response = await fetch('http://svg2pdf:3000/convert', {
+          method: 'POST',
+          body: await fs.readFile(req.file.path),
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(
+            `Error from svg2pdf service: ${response.statusText}, details: ${errorText}`
+          );
+          return res
+            .status(response.status)
+            .send(`Convert service error: ${errorText}`);
+        }
+        const pdfBuffer = await response.arrayBuffer();
+        filename = `${req.body.id}.pdf`;
+        await fs.writeFile(GRAPHICS_FOLDER + filename, new DataView(pdfBuffer));
+      } else {
+        filename = `${req.body.id}.${extension}`;
+        await fs.copy(req.file.path, GRAPHICS_FOLDER + filename);
+      }
+
+      // don't forget to delete all req.files when done
+      await fs.unlink(req.file.path);
+    } catch (e) {
+      console.error(e);
+      return res.sendStatus(500);
+    }
     makeThumb(req.params.project, filename, req.body.id, (code: any) => {
       if (code === 0) {
         res.sendStatus(200);
@@ -1627,11 +1661,13 @@ app.post('/project/:project/preview', aclProject, async (req, res) => {
   async function compilePreviewEnd() {
     await redisClient.HSET(keyStatus, 'preview', '0');
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    console.log('compiling ended', project);
     compilePreview();
   }
 
   function compilePreviewSuccess(): void {
     commitGit(project, req.user?.username || '', 'preview');
+    console.log(project, 'compiling success');
     compilePreviewEnd();
   }
 
@@ -1639,6 +1675,7 @@ app.post('/project/:project/preview', aclProject, async (req, res) => {
     const status = await redisClient.HGETALL(keyStatus);
     if (status && (status.locked > '0' || status.preview > '0')) {
       // wait
+      console.log(project, 'waiting');
       setTimeout(compilePreview, 1000);
       return;
     }
@@ -1647,6 +1684,7 @@ app.post('/project/:project/preview', aclProject, async (req, res) => {
       await redisClient.DEL(keyQueue);
       const body = JSON.parse(data);
       await redisClient.HSET(keyStatus, 'preview', '1');
+      console.log(project, 'compiling started');
       //compile
       saveSourceFilesSync(project, body);
       amcCommande(

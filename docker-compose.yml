@@ -31,3 +31,8 @@ services:
       - "9001:9001"
     depends_on:
       - redis
+      - svg2pdf
+  svg2pdf:
+    build: ./svg2pdf
+    ports:
+      - "3000:3000"

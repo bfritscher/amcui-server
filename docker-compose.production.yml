@@ -27,6 +27,9 @@ services:
       - ./data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
+  svg2pdf:
+    image: ghcr.io/bfritscher/amcui-svg2pdf:latest
+    restart: always
   amcuiserver:
     image: ghcr.io/bfritscher/amcui-server:latest
     env_file: .env
@@ -37,6 +40,7 @@ services:
       - ./templates:/amc/templates
     depends_on:
       - redis
+      - svg2pdf
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
