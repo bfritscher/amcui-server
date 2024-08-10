@@ -1557,6 +1557,9 @@ app.post(
         const pdfBuffer = await response.arrayBuffer();
         filename = `${req.body.id}.pdf`;
         await fs.writeFile(GRAPHICS_FOLDER + filename, new DataView(pdfBuffer));
+        if (req.body.excalidraw) {
+          await fs.writeFile(`${GRAPHICS_FOLDER}${req.body.id}.excalidraw`, req.body.excalidraw);
+        }
       } else {
         filename = `${req.body.id}.${extension}`;
         await fs.copy(req.file.path, GRAPHICS_FOLDER + filename);
@@ -1615,6 +1618,10 @@ app.post('/project/:project/graphics/delete', aclProject, (req, res) => {
         req.body.filename.split('.').splice(-1)[0]
     );
     fs.unlinkSync(GRAPHICS_FOLDER + req.body.id + '_thumb.jpg');
+    const excalidrawPath = `${GRAPHICS_FOLDER}${req.body.id}.excalidraw`;
+    if (fs.existsSync(excalidrawPath)) {
+      fs.unlinkSync(excalidrawPath);
+    }
     res.sendStatus(200);
   } catch (e) {
     res.sendStatus(500);
