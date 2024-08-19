@@ -38,6 +38,7 @@ import {Factor, Fido2Lib} from 'fido2-lib';
 import * as base64buffer from 'base64-arraybuffer';
 import {WebSocketServer} from 'ws';
 import fetch from 'node-fetch';
+import unzipper from 'unzipper';
 
 import {URL} from 'url';
 import ywsUtils from 'y-websocket/bin/utils';
@@ -1359,6 +1360,11 @@ app.post('/project/:project/rename', aclProject, (req, res) => {
     await acl.removeAllow(project, '/project/' + project, 'admin');
     await acl.removeRole(project);
     await acl.removeResource(project);
+    try {
+      await ywsUtils.getPersistence()?.provider?.clearDocument(`ws/${project}`);
+    } catch (err) {
+      console.log(err);
+    }    
     res.send(newProject);
   });
 });
@@ -1386,10 +1392,15 @@ async function deleteProject(
   keys.forEach((key) => {
     redisClient.DEL(key);
   });
-  fs.remove(PROJECTS_FOLDER + '/' + project, (err) => {
+  fs.remove(PROJECTS_FOLDER + '/' + project, async (err) => {
     if (err) {
       callback(true);
     } else {
+      try {
+        await ywsUtils.getPersistence()?.provider?.clearDocument(`ws/${project}`);
+      } catch (err) {
+        console.log(err);
+      }
       callback(false);
     }
   });
@@ -1467,8 +1478,80 @@ app.get('/project/:project/zip', aclProject, (req, res) => {
   });
   res.attachment(req.params.project + '.zip');
   zip.pipe(res);
-  zip.directory(PROJECTS_FOLDER + '/' + req.params.project, req.params.project);
+  zip.directory(PROJECTS_FOLDER + '/' + req.params.project, false);
   zip.finalize();
+});
+
+async function findDataJsonInZip(filePath: string): Promise<string | null> {
+  let rootFolder = '';
+  let dataJsonExists = false;
+
+  await unzipper.Open.file(filePath)
+    .then(directory => {
+      // Traverse through the entries to find where `data.json` exists
+      directory.files.forEach(file => {
+        if (file.path.endsWith('data.json')) {
+          dataJsonExists = true;
+          const parts = file.path.split('/');
+          // If it's inside a subfolder, get that subfolder name
+          if (parts.length > 1) {
+            rootFolder = parts.slice(0, parts.length - 1).join('/');
+          }
+        }
+      });
+    });
+
+  return dataJsonExists ? rootFolder : null;
+}
+
+app.post('/project/:project/zip', aclProject, uploadMiddleware.single('file'), async (req, res) => {
+  const projectFolder = path.join(PROJECTS_FOLDER, req.params.project);
+  if (!req.file) {
+    return res.status(400).send('No file uploaded');
+  }
+  try {
+    const rootFolder = await findDataJsonInZip(req.file.path);
+
+    if (rootFolder === null) {
+      return res.status(400).send('No data.json found in the zip file');
+    }    
+
+    console.log('Extracting the zip file:', req.file.path);
+    await unzipper.Open.file(req.file.path)
+      .then(directory => {
+        // Extract all files by removing the `rootFolder`
+        return Promise.all(directory.files.map(file => {
+          const fullFilePath = path.join(projectFolder, rootFolder ? file.path.replace(rootFolder + '/', '') : file.path);
+
+          // Only extract relevant files and not directories
+          if (file.type === 'File' && !fullFilePath.includes('.git/')) {
+            // Create nested folders if needed
+            const dirName = path.dirname(fullFilePath);
+            if (!fs.existsSync(dirName)) {
+              fs.mkdirSync(dirName, { recursive: true });
+            }
+            console.log('Extracting file:', fullFilePath);
+
+            return new Promise<void>((resolve, reject) => {
+              file.stream().pipe(fs.createWriteStream(fullFilePath))
+                .on('finish', resolve)
+                .on('error', reject);
+            });
+          }
+        }));
+      });
+
+    const json = path.resolve(
+      PROJECTS_FOLDER,
+      req.params.project + '/data.json'
+    );
+    res.send(fs.readFileSync(json));
+  } catch (error) {
+    console.error('Error extracting the zip file:', error);
+    res.status(500).send('Failed to extract and save the project');
+  } finally {
+    await fs.unlink(req.file.path);
+  }
 });
 
 app.get('/project/:project/static/:file*', aclProject, (req, res) => {

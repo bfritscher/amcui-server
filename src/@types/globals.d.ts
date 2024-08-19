@@ -40,17 +40,18 @@ declare module 'u2f' {
   export function request(appId: string, keyHandle?: string): Request;
   export function checkRegistration(
     request: Request,
-    registerData: Object
+    registerData: any
   ): RegistrationResult;
   export function checkSignature(
     request: Request,
-    signResult: Object,
+    signResult: any,
     publicKey: string
   ): SignatureResult;
 }
 
 
 declare module "y-websocket/bin/utils" {
+  import { LeveldbPersistence } from 'y-leveldb'
   export function setPersistence(
     persistence_: {
       bindState: (arg0: string, arg1: WSSharedDoc) => void;
@@ -59,6 +60,7 @@ declare module "y-websocket/bin/utils" {
     } | null
   ): void;
   export function getPersistence(): null | {
+    provider: LeveldbPersistence;
     bindState: (arg0: string, arg1: WSSharedDoc) => void;
     writeState: (arg0: string, arg1: WSSharedDoc) => Promise<any>;
   } | null;
