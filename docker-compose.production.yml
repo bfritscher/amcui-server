@@ -29,6 +29,8 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
   svg2pdf:
     image: ghcr.io/bfritscher/amcui-svg2pdf:latest
+    cap_add:
+      - SYS_ADMIN
     restart: always
   amcuiserver:
     image: ghcr.io/bfritscher/amcui-server:latest

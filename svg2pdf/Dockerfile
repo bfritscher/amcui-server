@@ -17,7 +17,7 @@ RUN fc-cache -fv
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-RUN npm install && groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+RUN npm install && groupadd -r pptruser && useradd -r -g pptruser -G audio,video -m pptruser \
 && chown -R pptruser:pptruser . 
 
 USER pptruser
