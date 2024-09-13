@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'svg2pdf/**'
+  workflow_dispatch:
 
 jobs:
   build_deploy:
@@ -24,4 +25,4 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
           directory: svg2pdf
-          dockerfile: ./svg2pdf/Dockerfilde
+          dockerfile: ./svg2pdf/Dockerfile
