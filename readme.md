@@ -18,6 +18,7 @@ JWT_SECRET=
 SENTRY_DSN=
 ADMIN_USER= # default user which will be admin (more user can be added via the admin project)
 FRONTEND_DOMAIN=
+YPERSISTENCE=/data/db
 ```
 
 ```
