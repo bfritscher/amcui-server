@@ -1,0 +1,27 @@
+name: Build and Push svg2pdf to GitHub Container Registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'svg2pdf/**'
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        name: Check out code
+      
+      - uses: mr-smithers-excellent/docker-build-push@v6
+        name: Build & push svg2pdf Docker image
+        with:
+          image: amcui-svg2pdf
+          addLatest: true
+          registry: ghcr.io
+          # githubOrg: override-org # optional
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+          directory: svg2pdf
+          dockerfile: ./svg2pdf/Dockerfilde

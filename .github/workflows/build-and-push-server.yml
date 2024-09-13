@@ -1,10 +1,11 @@
-name: Build and Push to GitHub Container Registry
+name: Build and Push server to GitHub Container Registry
 
 on:
   push:
     branches:
       - main
-
+    paths-ignore:
+      - 'svg2pdf/**'      
 jobs:
   build_deploy:
     runs-on: ubuntu-latest
@@ -22,14 +23,3 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
           buildArgs: COMMIT_SHA=${{ github.sha }}
-      
-      - uses: mr-smithers-excellent/docker-build-push@v6
-        name: Build & push svg2pdf Docker image
-        with:
-          image: amcui-svg2pdf
-          addLatest: true
-          registry: ghcr.io
-          # githubOrg: override-org # optional
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-          directory: svg2pdf
