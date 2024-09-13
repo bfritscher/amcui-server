@@ -37,8 +37,8 @@ services:
     env_file: .env
     restart: always
     volumes:
-      - ./frontend/dist/spa:/amc/dist/public
       - ./projects:/amc/projects
+      - ./data/db:/data/db      
       - ./templates:/amc/templates
     depends_on:
       - redis
@@ -77,6 +77,8 @@ services:
       - "traefik.http.routers.amcui_secured.entrypoints=websecure"
       - "traefik.http.routers.amcui_secured.tls=true"
       - "traefik.http.routers.amcui_secured.tls.certresolver=myresolver"
+    environment:
+      - AMCUI_API=/api      
     networks:
       - web
       - default
