@@ -23,4 +23,4 @@ VOLUME ["/amc/projects"]
 VOLUME ["/amc/templates"]
 
 # Define default command.
-CMD ["node", "dist/server.js"]
+CMD ["npm", "run", "start"]

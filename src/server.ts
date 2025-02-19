@@ -1,10 +1,4 @@
-import * as Sentry from '@sentry/node';
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    tracesSampleRate: 1.0,
-  });
-}
+import Sentry from './sentry.js';
 
 import fs from 'fs-extra';
 import StreamSplitter from 'stream-splitter';
@@ -3209,6 +3203,7 @@ app.use(
     } else {
       console.log('custom_error_handler_skip:', err);
       console.log(Object.keys(err));
+      Sentry.captureException(err);
       next(err);
     }
   }
