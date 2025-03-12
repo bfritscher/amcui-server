@@ -1426,6 +1426,9 @@ app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
       'log',
       '--walk-reflogs',
       '--pretty=format:%H%+gs%+an%+ci',
+      '--unified=0',
+      'data.json',
+      'options.xml'
     ]);
     const logs = [];
     const json = data.split('\n');
@@ -1439,9 +1442,17 @@ app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
         msg: msg.substring(idx + 2),
         username: json[i + 2],
         date: new Date(json[i + 3]),
+        diff: "",
       };
       logs.push(log);
       i += 4;
+      while (json[i] !== '') {
+        if (json[i].startsWith('+') && !json[i].includes('updatedAt')) {
+          log.diff += json[i] + '\n';
+        }
+        i++;
+      }
+      i++;
     }
     res.json(logs);
   } catch (err) {
