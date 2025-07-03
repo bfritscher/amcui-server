@@ -660,10 +660,31 @@ app.post('/admin/project/:project/delete', aclAdmin, (req, res) => {
 });
 
 app.post('/admin/project/:project/gitgc', aclAdmin, async (req, res) => {
-  const g = simpleGit(PROJECTS_FOLDER + '/' + req.params.project);
-  const data = await g.raw(['gc', '--aggressive']);
-  res.json(data);
+  try {
+    // Use the same Git lock mechanism to prevent conflicts
+    const existingLock = gitLocks.get(req.params.project);
+    if (existingLock) {
+      await existingLock;
+    }
+
+    const gitOperation = performGitGc(req.params.project);
+    gitLocks.set(req.params.project, gitOperation);
+
+    try {
+      const data = await gitOperation;
+      res.json(data);
+    } finally {
+      gitLocks.delete(req.params.project);
+    }
+  } catch (err) {
+    res.status(500).send(err);
+  }
 });
+
+async function performGitGc(project: string): Promise<string> {
+  const g = simpleGit(PROJECTS_FOLDER + '/' + project);
+  return await g.raw(['gc', '--aggressive']);
+}
 
 app.post('/admin/user/:username/delete', aclAdmin, async (req, res) => {
   const username = req.params.username;
@@ -1115,7 +1136,34 @@ function createProject(
 
 function ignoreGitError() {}
 
+// Git lock mechanism to prevent concurrent operations
+const gitLocks = new Map<string, Promise<any>>();
+
 async function commitGit(
+  project: string,
+  username: string,
+  message: string
+): Promise<void> {
+  // Check if there's already a Git operation running for this project
+  const existingLock = gitLocks.get(project);
+  if (existingLock) {
+    // Wait for the existing operation to complete
+    await existingLock;
+  }
+
+  // Create a new lock for this operation
+  const gitOperation = performGitCommit(project, username, message);
+  gitLocks.set(project, gitOperation);
+
+  try {
+    await gitOperation;
+  } finally {
+    // Clean up the lock
+    gitLocks.delete(project);
+  }
+}
+
+async function performGitCommit(
   project: string,
   username: string,
   message: string
@@ -1461,20 +1509,37 @@ app.get('/project/:project/gitlogs', aclProject, async (req, res) => {
   }
 });
 
-app.post('/project/:project/revert', aclProject, (req, res) => {
-  const g = simpleGit(PROJECTS_FOLDER + '/' + req.params.project);
-  g.raw(['reset', '--hard', req.body.sha], (err: Error | null) => {
-    if (err) {
-      Sentry.captureException(err);
-      res.status(500).send(err);
+app.post('/project/:project/revert', aclProject, async (req, res) => {
+  try {
+    // Use the same Git lock mechanism to prevent conflicts
+    const existingLock = gitLocks.get(req.params.project);
+    if (existingLock) {
+      await existingLock;
     }
-    const json = path.resolve(
-      PROJECTS_FOLDER,
-      req.params.project + '/data.json'
-    );
-    res.send(fs.readFileSync(json));
-  });
+
+    const gitOperation = performGitRevert(req.params.project, req.body.sha);
+    gitLocks.set(req.params.project, gitOperation);
+
+    try {
+      await gitOperation;
+      const json = path.resolve(
+        PROJECTS_FOLDER,
+        req.params.project + '/data.json'
+      );
+      res.send(fs.readFileSync(json));
+    } finally {
+      gitLocks.delete(req.params.project);
+    }
+  } catch (err) {
+    Sentry.captureException(err);
+    res.status(500).send(err);
+  }
 });
+
+async function performGitRevert(project: string, sha: string): Promise<void> {
+  const g = simpleGit(PROJECTS_FOLDER + '/' + project);
+  await g.raw(['reset', '--hard', sha]);
+}
 
 app.get('/project/:project/zip', aclProject, (req, res) => {
   const zip = archiver('zip');
